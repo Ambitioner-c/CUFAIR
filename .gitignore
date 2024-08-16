@@ -9,12 +9,11 @@ gen
 
 # Data files
 /Data/
+!/Data/RST/GUM/*.py
+!/Data/RST/GUM/*.md
 
 # Pretrained model files
 */PretrainedModels/
 
 # Fine-tuned model files
 */FineTunedModels/
-
-!*.py
-!*.md
