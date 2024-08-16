@@ -1,0 +1,17 @@
+### Example user template template
+### Example user template
+
+# IntelliJ project files
+.idea
+*.iml
+out
+gen
+
+# Data files
+/Data/
+
+# Pretrained model files
+*/PretrainedModels/
+
+# Fine-tuned model files
+*/FineTunedModels/
