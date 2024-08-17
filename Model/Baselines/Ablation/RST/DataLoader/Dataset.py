@@ -33,7 +33,7 @@ class RSTDataset(Dataset):
             df = self.processor.get_test_examples(data_dir)
 
         self.features = self.convert_examples_to_features(df, tokenizer, max_length)
-        self.labels = Tensor(df['label'])
+        self.labels = Tensor(df['label']).long()
 
     @staticmethod
     def convert_examples_to_features(
