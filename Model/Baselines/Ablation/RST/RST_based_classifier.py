@@ -14,7 +14,7 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 
 import transformers
-from tqdm import tqdm, trange
+from tqdm import tqdm
 
 transformers.logging.set_verbosity_error()
 
@@ -33,11 +33,14 @@ simplefilter(action='ignore', category=UserWarning)
 
 
 class RSTModel(nn.Module):
-    def __init__(self, freeze=False, pretrained_model_path=None, device=None):
+    def __init__(self, freeze=False, pretrained_model_path=None, device=None, num_labels=2):
         super(RSTModel, self).__init__()
         self.device = device
 
-        self.bert = BertForSequenceClassification.from_pretrained(pretrained_model_path, num_labels=3)
+        self.bert = BertForSequenceClassification.from_pretrained(pretrained_model_path, num_labels=num_labels)
+        for p in self.bert.parameters():
+            p.data = p.data.contiguous()
+
         self.config = AutoConfig.from_pretrained(pretrained_model_path)
 
         if freeze:
@@ -65,8 +68,7 @@ def train(task_name, model, train_dataloader, dev_dataloader, epochs, lr, device
     best_loss = float('inf')
 
     n = 0
-    for epoch in trange(epochs):
-        train_losses = []
+    for epoch in range(epochs):
         for train_sample in tqdm(train_dataloader):
             train_labels = train_sample['label']
 
@@ -79,8 +81,7 @@ def train(task_name, model, train_dataloader, dev_dataloader, epochs, lr, device
 
             optimizer.step()
 
-            train_losses.append(train_loss.item())
-            temp_train_result = f'{task_name}\tepoch/epochs: {epoch + 1}/{epochs}\tloss: {np.mean(train_losses)}'
+            temp_train_result = f'{task_name}\tepoch/epochs: {epoch + 1}/{epochs}\ttrain loss: {np.mean(train_loss.item())}'
             with open(temp_train_csv, 'a' if os.path.exists(temp_train_csv) else 'w') as f:
                 f.write(temp_train_result + '\n')
             print(temp_train_result)
@@ -95,7 +96,7 @@ def train(task_name, model, train_dataloader, dev_dataloader, epochs, lr, device
                         dev_loss = loss_function(input=dev_output, target=dev_labels.view(-1).to(device))
 
                         dev_losses.append(dev_loss.item())
-                temp_dev_result = f'{task_name}\tepoch/epochs: {epoch + 1}/{epochs}\tloss: {np.mean(dev_losses)}'
+                temp_dev_result = f'{task_name}\tepoch/epochs: {epoch + 1}/{epochs}\tdev loss: {np.mean(dev_losses)}'
                 with open(temp_dev_csv, 'a' if os.path.exists(temp_dev_csv) else 'w') as f:
                     f.write(temp_dev_result + '\n')
                 print(temp_dev_result)
@@ -124,7 +125,7 @@ def evaluate(task_name, model, test_dataloader, device):
             test_loss = nn.CrossEntropyLoss()(input=test_output, target=test_labels.view(-1).to(device))
 
             test_losses.append(test_loss.item())
-    temp_test_result = f'{task_name}\tloss: {np.mean(test_losses)}'
+    temp_test_result = f'{task_name}\ttest loss: {np.mean(test_losses)}'
     print(temp_test_result)
 
 
@@ -137,7 +138,7 @@ def parse_args():
                         help='Data directory')
     parser.add_argument('--pretrained_model_path', nargs='?', default='/data/cuifulai/PretrainedModel',
                         help='Pretrained model path')
-    parser.add_argument('--epochs', type=int, default=5,
+    parser.add_argument('--epochs', type=int, default=2,
                         help='Number of epochs')
     parser.add_argument('--batch_size', type=int, default=32,
                         help='Batch size')
@@ -149,6 +150,10 @@ def parse_args():
                         help='Random seed')
     parser.add_argument('--device', nargs='?', default='cuda:0',
                         help='Device')
+    parser.add_argument('--freeze', type=bool, default=False,
+                        help='Freeze')
+    parser.add_argument('--num_labels', type=int, default=3,
+                        help='Number of labels')
 
     return parser.parse_args()
 
@@ -171,9 +176,10 @@ def main():
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
     model = RSTModel(
-        freeze=False,
+        freeze=args.freeze,
         pretrained_model_path=args.pretrained_model_path,
-        device=device
+        device=device,
+        num_labels=args.num_labels
     )
 
     best_model = train(args.task_name, model, train_dataloader, dev_dataloader, args.epochs, args.lr, device)
