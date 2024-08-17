@@ -3,6 +3,9 @@
 # @Time: 2024/8/16 19:53
 import argparse
 import copy
+import os
+os.environ['TOKENIZERS_PARALLELISM'] = 'true'
+
 import os.path
 from datetime import datetime
 
@@ -138,7 +141,7 @@ def parse_args():
                         help='Data directory')
     parser.add_argument('--pretrained_model_path', nargs='?', default='/data/cuifulai/PretrainedModel',
                         help='Pretrained model path')
-    parser.add_argument('--epochs', type=int, default=2,
+    parser.add_argument('--epochs', type=int, default=3,
                         help='Number of epochs')
     parser.add_argument('--batch_size', type=int, default=32,
                         help='Batch size')
