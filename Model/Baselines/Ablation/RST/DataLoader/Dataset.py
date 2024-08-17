@@ -32,7 +32,7 @@ class RSTDataset(Dataset):
         else:
             df = self.processor.get_test_examples(data_dir)
 
-        self.left_features, self.right_features = self.convert_examples_to_features(df, tokenizer, max_length)
+        self.features = self.convert_examples_to_features(df, tokenizer, max_length)
         self.labels = Tensor(df['label'])
 
     @staticmethod
@@ -40,35 +40,27 @@ class RSTDataset(Dataset):
             examples: pd.DataFrame,
             tokenizer: PreTrainedTokenizer,
             max_length: Optional[int]=None,
-    ) -> [Tensor]:
+    ) -> Tensor:
         if max_length is None:
             max_length = tokenizer.model_max_length
 
-        left_features = tokenizer(
+        features = tokenizer(
             examples['left'].tolist(),
-            padding=True,
-            truncation=True,
-            max_length=max_length,
-            return_tensors='pt',
-        )['input_ids']
-
-        right_features = tokenizer(
             examples['right'].tolist(),
             padding=True,
             truncation=True,
             max_length=max_length,
-            return_tensors='pt',
+            return_tensors='pt'
         )['input_ids']
 
-        return left_features, right_features
+        return features
 
     def __len__(self):
         return len(self.labels)
 
     def __getitem__(self, idx):
         return {
-            'left': self.left_features[idx],
-            'right': self.right_features[idx],
+            'feature': self.features[idx],
             'label': self.labels[idx],
         }
 
@@ -79,14 +71,12 @@ def main():
     pretrained_model_path = '/data/cuifulai/PretrainedModel'
     tokenizer = AutoTokenizer.from_pretrained(pretrained_model_path)
 
-    train_dataset = RSTDataset(tokenizer, data_dir, mode='Train', max_length=128)
+    train_dataset = RSTDataset(tokenizer, data_dir, mode='Train', max_length=256)
     train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
     for example in train_dataloader:
-        left = example['left']
-        right = example['right']
+        feature = example['feature']
         label = example['label']
-        print(left)
-        print(right)
+        print(feature)
         print(label)
 
         break
