@@ -29,6 +29,12 @@ from transformers import (
 )
 
 from Model.Baselines.Ablation.RST.DataLoader.Dataset import RSTDataset
+from Model.Unit.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+)
 
 from warnings import simplefilter
 simplefilter(action='ignore', category=FutureWarning)
@@ -57,6 +63,15 @@ class RSTModel(nn.Module):
         return output
 
 
+def get_metrics(input: np.array, target: np.array):
+    acc = accuracy_score(input, target)
+    pre = precision_score(input, target, average='weighted')
+    rec = recall_score(input, target, average='weighted')
+    f1 = f1_score(input, target, average='weighted')
+
+    return acc, pre, rec, f1
+
+
 def train(task_name, model, train_dataloader, dev_dataloader, epochs, lr, device):
     temp_train_csv = f'./Result/Temp/{task_name}-{datetime.now().strftime("%Y%m%d_%H%M%S")}-train.csv'
     temp_dev_csv = f'./Result/Temp/{task_name}-{datetime.now().strftime("%Y%m%d_%H%M%S")}-dev.csv'
@@ -69,6 +84,7 @@ def train(task_name, model, train_dataloader, dev_dataloader, epochs, lr, device
 
     best_model = None
     best_loss = float('inf')
+    best_acc, best_pre, best_rec, best_f1 = -1, -1, -1, -1
 
     n = 0
     for epoch in range(epochs):
@@ -91,26 +107,46 @@ def train(task_name, model, train_dataloader, dev_dataloader, epochs, lr, device
 
             if n % 10 == 0:
                 dev_losses = []
+                dev_accs, dev_pres, dev_recs, dev_f1s = [], [], [], []
                 for dev_sample in dev_dataloader:
                     dev_labels = dev_sample['label']
                     with torch.no_grad():
                         dev_output = model(dev_sample)
 
                         dev_loss = loss_function(input=dev_output, target=dev_labels.view(-1).to(device))
+                        dev_acc, dev_pre, dev_rec, dev_f1 = get_metrics(dev_output.cpu().numpy(), dev_labels.cpu().numpy())
 
                         dev_losses.append(dev_loss.item())
-                temp_dev_result = f'{task_name}\tepoch/epochs: {epoch + 1}/{epochs}\tdev loss: {np.mean(dev_losses)}'
+                        dev_accs.append(dev_acc)
+                        dev_pres.append(dev_pre)
+                        dev_recs.append(dev_rec)
+                        dev_f1s.append(dev_f1)
+                temp_dev_result = (f'{task_name}\t'
+                                   f'epoch/epochs:{epoch + 1}/{epochs}\t'
+                                   f'dev_loss:{np.mean(dev_losses)}\t'
+                                   f'dev_acc:{np.mean(dev_accs)}\t'
+                                   f'dev_pre:{np.mean(dev_pres)}\t'
+                                   f'dev_rec:{np.mean(dev_recs)}\t'
+                                   f'dev_f1:{np.mean(dev_f1s)}\t')
                 with open(temp_dev_csv, 'a' if os.path.exists(temp_dev_csv) else 'w') as f:
                     f.write(temp_dev_result + '\n')
                 print(temp_dev_result)
 
                 if np.mean(dev_losses) < best_loss:
                     best_loss = np.mean(dev_losses)
+                    best_acc = np.mean(dev_accs)
+                    best_pre = np.mean(dev_pres)
+                    best_rec = np.mean(dev_recs)
+                    best_f1 = np.mean(dev_f1s)
                     best_model = copy.deepcopy(model)
             n += 1
 
     best_model.bert.save_pretrained(finetuned_model_path)
-    print(f'Best loss: {best_loss}')
+    print(f'Best loss:{best_loss}\t'
+          f'Best acc:{best_acc}\t'
+          f'Best pre:{best_pre}\t'
+          f'Best rec:{best_rec}\t'
+          f'Best f1:{best_f1}\t')
     print(f'Finetuned model path: {finetuned_model_path}')
 
     return best_model
@@ -120,15 +156,26 @@ def evaluate(task_name, model, test_dataloader, device):
     model.eval()
 
     test_losses = []
+    test_accs, test_pres, test_recs, test_f1s = [], [], [], []
     for test_sample in tqdm(test_dataloader):
         test_labels = test_sample['label']
         with torch.no_grad():
             test_output = model(test_sample)
 
             test_loss = nn.CrossEntropyLoss()(input=test_output, target=test_labels.view(-1).to(device))
+            test_acc, test_pre, test_rec, test_f1 = get_metrics(test_output.cpu().numpy(), test_labels.cpu().numpy())
 
             test_losses.append(test_loss.item())
-    temp_test_result = f'{task_name}\ttest loss: {np.mean(test_losses)}'
+            test_accs.append(test_acc)
+            test_pres.append(test_pre)
+            test_recs.append(test_rec)
+            test_f1s.append(test_f1)
+    temp_test_result = (f'{task_name}\t'
+                        f'test_loss:{np.mean(test_losses)}\t'
+                        f'test_acc:{np.mean(test_accs)}\t'
+                        f'test_pre:{np.mean(test_pres)}\t'
+                        f'test_rec:{np.mean(test_recs)}\t'
+                        f'test_f1:{np.mean(test_f1s)}\t')
     print(temp_test_result)
 
 
@@ -175,8 +222,8 @@ def main():
     test_dataset = RSTDataset(tokenizer, args.data_dir, mode='Test', max_length=args.max_length)
 
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    dev_dataloader = DataLoader(dev_dataset, batch_size=args.batch_size, shuffle=False)
-    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    dev_dataloader = DataLoader(dev_dataset, batch_size=args.batch_size, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=True)
 
     model = RSTModel(
         freeze=args.freeze,
