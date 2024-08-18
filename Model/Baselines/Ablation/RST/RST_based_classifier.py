@@ -155,23 +155,19 @@ def train(task_name, model, train_dataloader, dev_dataloader, epochs, lr, device
 def evaluate(task_name, model, test_dataloader, device):
     model.eval()
 
-    test_losses = []
     test_accs, test_pres, test_recs, test_f1s = [], [], [], []
     for test_sample in tqdm(test_dataloader):
         test_labels = test_sample['label']
         with torch.no_grad():
             test_output = model(test_sample)
 
-            test_loss = nn.CrossEntropyLoss()(input=test_output, target=test_labels.view(-1).to(device))
             test_acc, test_pre, test_rec, test_f1 = get_metrics(test_output.cpu().numpy(), test_labels.cpu().numpy())
 
-            test_losses.append(test_loss.item())
             test_accs.append(test_acc)
             test_pres.append(test_pre)
             test_recs.append(test_rec)
             test_f1s.append(test_f1)
     temp_test_result = (f'{task_name}\t'
-                        f'test_loss:{round(np.mean(test_losses), 4)}\t'
                         f'test_acc:{round(np.mean(test_accs), 4)}\t'
                         f'test_pre:{round(np.mean(test_pres), 4)}\t'
                         f'test_rec:{round(np.mean(test_recs), 4)}\t'
