@@ -433,7 +433,14 @@ def main():
     data_dir = '/home/cuifulai/Projects/CQA/Data/RST/GUM'
 
     df = RSTProcessor().get_train_examples(data_dir)
-    print(df.head(10).to_csv())
+    # print(df.head(10).to_csv())
+    print('Train: ', df['label'].value_counts())
+
+    df = RSTProcessor().get_dev_examples(data_dir)
+    print('Dev: ', df['label'].value_counts())
+
+    df = RSTProcessor().get_test_examples(data_dir)
+    print('Test: ', df['label'].value_counts())
 
 
 if __name__ == '__main__':
