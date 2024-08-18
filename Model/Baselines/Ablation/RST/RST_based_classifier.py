@@ -72,7 +72,7 @@ def get_metrics(input: np.array, target: np.array):
     return acc, pre, rec, f1
 
 
-def train(task_name, model, train_dataloader, dev_dataloader, epochs, lr, device):
+def train(task_name, model, train_dataloader, dev_dataloader, epochs, lr, device, step):
     temp_train_csv = f'./Result/Temp/{task_name}-{datetime.now().strftime("%Y%m%d_%H%M%S")}-train.csv'
     temp_dev_csv = f'./Result/Temp/{task_name}-{datetime.now().strftime("%Y%m%d_%H%M%S")}-dev.csv'
     finetuned_model_path = f'./FinetunedModel/{task_name}-{datetime.now().strftime("%Y%m%d_%H%M%S")}/bert-base-uncased'
@@ -103,9 +103,9 @@ def train(task_name, model, train_dataloader, dev_dataloader, epochs, lr, device
             temp_train_result = f'{task_name}\tepoch/epochs: {epoch + 1}/{epochs}\ttrain loss: {np.mean(train_loss.item())}'
             with open(temp_train_csv, 'a' if os.path.exists(temp_train_csv) else 'w') as f:
                 f.write(temp_train_result + '\n')
-            print(temp_train_result)
+            # print(temp_train_result)
 
-            if n % 10 == 0:
+            if n % step == 0:
                 dev_losses = []
                 dev_accs, dev_pres, dev_recs, dev_f1s = [], [], [], []
                 for dev_sample in dev_dataloader:
@@ -123,11 +123,11 @@ def train(task_name, model, train_dataloader, dev_dataloader, epochs, lr, device
                         dev_f1s.append(dev_f1)
                 temp_dev_result = (f'{task_name}\t'
                                    f'epoch/epochs:{epoch + 1}/{epochs}\t'
-                                   f'dev_loss:{np.mean(dev_losses)}\t'
-                                   f'dev_acc:{np.mean(dev_accs)}\t'
-                                   f'dev_pre:{np.mean(dev_pres)}\t'
-                                   f'dev_rec:{np.mean(dev_recs)}\t'
-                                   f'dev_f1:{np.mean(dev_f1s)}\t')
+                                   f'dev_loss:{round(np.mean(dev_losses), 4)}\t'
+                                   f'dev_acc:{round(np.mean(dev_accs), 4)}\t'
+                                   f'dev_pre:{round(np.mean(dev_pres), 4)}\t'
+                                   f'dev_rec:{round(np.mean(dev_recs), 4)}\t'
+                                   f'dev_f1:{round(np.mean(dev_f1s), 4)}\t')
                 with open(temp_dev_csv, 'a' if os.path.exists(temp_dev_csv) else 'w') as f:
                     f.write(temp_dev_result + '\n')
                 print(temp_dev_result)
@@ -171,11 +171,11 @@ def evaluate(task_name, model, test_dataloader, device):
             test_recs.append(test_rec)
             test_f1s.append(test_f1)
     temp_test_result = (f'{task_name}\t'
-                        f'test_loss:{np.mean(test_losses)}\t'
-                        f'test_acc:{np.mean(test_accs)}\t'
-                        f'test_pre:{np.mean(test_pres)}\t'
-                        f'test_rec:{np.mean(test_recs)}\t'
-                        f'test_f1:{np.mean(test_f1s)}\t')
+                        f'test_loss:{round(np.mean(test_losses), 4)}\t'
+                        f'test_acc:{round(np.mean(test_accs), 4)}\t'
+                        f'test_pre:{round(np.mean(test_pres), 4)}\t'
+                        f'test_rec:{round(np.mean(test_recs), 4)}\t'
+                        f'test_f1:{round(np.mean(test_f1s), 4)}\t')
     print(temp_test_result)
 
 
@@ -204,6 +204,8 @@ def parse_args():
                         help='Freeze')
     parser.add_argument('--num_labels', type=int, default=3,
                         help='Number of labels')
+    parser.add_argument('--step', type=int, default=1,
+                        help='Step')
 
     return parser.parse_args()
 
@@ -232,7 +234,7 @@ def main():
         num_labels=args.num_labels
     )
 
-    best_model = train(args.task_name, model, train_dataloader, dev_dataloader, args.epochs, args.lr, device)
+    best_model = train(args.task_name, model, train_dataloader, dev_dataloader, args.epochs, args.lr, device, args.step)
 
     evaluate(args.task_name, best_model, test_dataloader, device)
 
