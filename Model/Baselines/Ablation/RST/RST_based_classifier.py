@@ -154,7 +154,7 @@ def train(task_name, model, train_dataloader, dev_dataloader, epochs, lr, device
     return best_model
 
 
-def evaluate(task_name, model, test_dataloader, device):
+def evaluate(task_name, model, test_dataloader):
     model.eval()
 
     test_accs, test_pres, test_recs, test_f1s = [], [], [], []
