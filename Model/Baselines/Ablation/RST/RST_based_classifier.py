@@ -100,7 +100,9 @@ def train(task_name, model, train_dataloader, dev_dataloader, epochs, lr, device
 
             optimizer.step()
 
-            temp_train_result = f'{task_name}\tepoch/epochs: {epoch + 1}/{epochs}\ttrain loss: {np.mean(train_loss.item())}'
+            temp_train_result = (f'{task_name}\t'
+                                 f'epoch/epochs:{epoch + 1}/{epochs}\t'
+                                 f'train_loss:{np.mean(train_loss.item())}')
             with open(temp_train_csv, 'a' if os.path.exists(temp_train_csv) else 'w') as f:
                 f.write(temp_train_result + '\n')
             # print(temp_train_result)
