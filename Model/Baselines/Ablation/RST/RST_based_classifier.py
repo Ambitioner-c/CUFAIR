@@ -234,7 +234,7 @@ def main():
 
     best_model = train(args.task_name, model, train_dataloader, dev_dataloader, args.epochs, args.lr, device, args.step)
 
-    evaluate(args.task_name, best_model, test_dataloader, device)
+    evaluate(args.task_name, best_model, test_dataloader)
 
 
 if __name__ == '__main__':
