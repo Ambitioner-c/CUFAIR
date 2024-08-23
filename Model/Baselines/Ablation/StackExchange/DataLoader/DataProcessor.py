@@ -2,6 +2,7 @@
 # @Author: Fulai Cui (cuifulai@mail.hfut.edu.cn)
 # @Time: 2024/8/23 11:17
 import os.path
+import random
 import re
 from abc import ABC
 
@@ -12,8 +13,26 @@ from transformers import DataProcessor
 import xml.etree.ElementTree as ET
 
 
-def cprint(content: str):
-    return f'\033[33m{content}\033[0m'
+def cprint(content: str, color: str=None) -> str:
+    colors = {
+        'red': '\033[31m',
+        'green': '\033[32m',
+        'yellow': '\033[33m',
+        'blue': '\033[34m',
+        'purple': '\033[35m',
+        'cyan': '\033[36m',
+        'white': '\033[37m',
+        'red_bg': '\033[41m',
+        'green_bg': '\033[42m',
+        'yellow_bg': '\033[43m',
+        'blue_bg': '\033[44m',
+        'purple_bg': '\033[45m',
+        'cyan_bg': '\033[46m',
+        'white_bg': '\033[47m',
+    }
+    if color is None:
+        color = random.choice(list(colors.values()))
+    return f'{colors[color]}{content}\033[0m'
 
 
 class PingMatch:
@@ -127,15 +146,50 @@ class PingMatch:
         else:
             return None
 
+    @staticmethod
+    def visualize(participants: [str], pings: [int], comments: [str], scores: [int]):
+        length = len(pings)
+
+        print('\n', '-' * 100)
+        print(f"{cprint('Poster', 'red_bg')}: ", participants[0])
+
+        symbols = ['_____' for _ in range(length)]
+        links = []
+        for _, ping in enumerate(pings):
+            if ping:
+                symbols[ping - 1] = '__|__'
+                symbols[_] = '__|__'
+
+                links.append([ping - 1, _])
+        def connection(_link: [int, int]):
+            _symbols = ['     ' for _ in range(length)]
+            _symbols[_link[0]] = '  ___'
+            _symbols[_link[1]] = '___  '
+            for _ in range(_link[0] + 1, _link[1]):
+                _symbols[_] = '_____'
+            return _symbols
+        for link in sorted(links, reverse=True):
+            print('     ', ' '.join(connection(link)))
+        print('     ', ' '.join(symbols))
+
+        print(cprint('Name ', 'green_bg'), ' '.join([f'{x[:4]}.' for x in participants[1:]]))
+
+        print(cprint('Index', 'yellow_bg'), ' '.join([f"{'   ' + str(index + 1) + '  '}"[-5:] for index in range(length)]))
+
+        print(cprint('Ping ', 'blue_bg'), ' '.join([f"{'   ' + str(ping) + '  '}"[-5:] for ping in pings]))
+
+        print(cprint('Score', 'purple_bg'), ' '.join([f"{'   ' + str(score) + '  '}"[-5:] for score in scores]))
+
 
 class SEProcessor(DataProcessor, ABC):
-    def __init__(self, data_name: str='meta.stackexchange.com', limit: int=0):
+    def __init__(self, data_name: str='meta.stackexchange.com', limit: int=0, show: bool=False):
         super(SEProcessor, self).__init__()
 
         self.ping_match = PingMatch()
 
         self.data_name = data_name
         self.limit = limit
+        self.show = show
 
     def get_train_examples(self, data_dir: str) -> pd.DataFrame:
         return self.create_examples(os.path.join(data_dir, self.data_name, self.data_name + '.xml'))
@@ -150,15 +204,13 @@ class SEProcessor(DataProcessor, ABC):
         pass
 
     def create_examples(self, filepath: str) -> pd.DataFrame:
-        for elem in tqdm(self.iterparse(filepath), desc=f'Parsing {cprint(filepath)} XML file'):
+        for elem in tqdm(self.iterparse(filepath), desc=f'Parsing {cprint(filepath, 'red')} XML file'):
             # Answer
             for answer in elem.findall('Answer'):
                 if int(answer.attrib['COMMENT_COUNT']):
                     participants, pings, comments, scores = self.ping_match.main(answer)
-                    print(participants)
-                    print(pings)
-                    print(comments)
-                    print(scores)
+                    if self.show:
+                        self.ping_match.visualize(participants, pings, comments, scores)
 
         # TODO Return a DataFrame
         pass
@@ -187,7 +239,7 @@ def main():
     data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
     data_name = 'meta.stackoverflow.com'
 
-    SEProcessor(data_name, limit=10).get_train_examples(data_dir)
+    SEProcessor(data_name, limit=100, show=True).get_train_examples(data_dir)
 
 
 if __name__ == '__main__':
