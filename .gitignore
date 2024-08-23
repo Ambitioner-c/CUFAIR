@@ -15,7 +15,10 @@ gen
 !/Data/StackExchange/*.md
 
 # Pretrained model files
-*/PretrainedModels/
+**/PretrainedModels/
 
 # Fine-tuned model files
-*/FineTunedModels/
+**/FineTunedModels/
+
+# Model output files
+**/Result/
