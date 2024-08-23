@@ -88,7 +88,7 @@ class PingMatch:
                                 answer_with_interactions = 1
                                 comment_with_interactions = 1
 
-                                pings.append(participants_dict[x] for x in participants_dict if x != a_name)
+                                pings.append(participants_dict[[x for x in participants_dict if x != a_name][0]])
                             else:
                                 if participants_dict[a_name] != 0:
                                     self.num_of_interactions += 1

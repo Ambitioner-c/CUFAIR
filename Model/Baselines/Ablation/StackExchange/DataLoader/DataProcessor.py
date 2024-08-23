@@ -42,7 +42,7 @@ class PingMatch:
                     pings.append(participants_dict[a_name])
             elif len(participants_dict) == 2 and c_name in participants_dict:
                 if c_name == a_name:
-                    pings.append(participants_dict[x] for x in participants_dict if x != a_name)
+                    pings.append(participants_dict[[x for x in participants_dict if x != a_name][0]])
                 else:
                     pings.append(participants_dict[a_name])
             else:
