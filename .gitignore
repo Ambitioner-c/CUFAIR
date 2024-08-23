@@ -11,6 +11,8 @@ gen
 /Data/
 !/Data/RST/GUM/*.py
 !/Data/RST/GUM/*.md
+!/Data/StackExchange/*.py
+!/Data/StackExchange/*.md
 
 # Pretrained model files
 */PretrainedModels/
