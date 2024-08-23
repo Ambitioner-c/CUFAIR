@@ -50,42 +50,65 @@ class PingMatch:
                 answer_with_interactions = 0
 
                 if int(answer.attrib['COMMENT_COUNT']):
+                    a_name = answer.attrib['OWNER_DISPLAY_NAME']
+
                     participants = list()
-                    participants.append(answer.attrib['OWNER_DISPLAY_NAME'])
+                    participants_dict = dict()
                     pings = list()
 
-                    for comment in answer.find('AComment').findall('Comment'):
+                    participants.append(a_name)
+                    participants_dict[a_name] = 0
+
+                    # Comments
+                    for c_idx, comment in enumerate(answer.find('AComment').findall('Comment')):
+                        c_name = comment.attrib['DISPLAY_NAME']
+                        c_body = comment.find('CBody').text
+
                         self.num_of_comments += 1
                         question_with_comments = 1
                         answer_with_comments = 1
 
                         comment_with_interactions = 0
 
-                        if len(participants) == 2 and comment.attrib['DISPLAY_NAME'] == participants[0]:
-                            self.num_of_interactions += 1
-                            question_with_interactions = 1
-                            answer_with_interactions = 1
-                            comment_with_interactions = 1
+                        if len(participants_dict) == 1:
+                            if c_name == a_name:
+                                pings.append(0)
+                            else:
+                                if participants_dict[a_name] != 0:
+                                    self.num_of_interactions += 1
+                                    question_with_interactions = 1
+                                    answer_with_interactions = 1
+                                    comment_with_interactions = 1
 
-                            pings.append(1)
-                        else:
-                            c_body = comment.find('CBody').text
-
-                            _, index = self.interaction(participants, self.parse_ping(c_body))
-                            if index is not None:
+                                pings.append(participants_dict[a_name])
+                        elif len(participants_dict) == 2 and c_name in participants_dict:
+                            if c_name == a_name:
                                 self.num_of_interactions += 1
                                 question_with_interactions = 1
                                 answer_with_interactions = 1
                                 comment_with_interactions = 1
 
-                                if _ is not None:
-                                    pings.append([_, index])
-                                else:
-                                    pings.append(index)
+                                pings.append(participants_dict[x] for x in participants_dict if x != a_name)
                             else:
-                                pings.append(None)
+                                if participants_dict[a_name] != 0:
+                                    self.num_of_interactions += 1
+                                    question_with_interactions = 1
+                                    answer_with_interactions = 1
+                                    comment_with_interactions = 1
 
-                        participants.append(comment.attrib['DISPLAY_NAME'])
+                                pings.append(participants_dict[a_name])
+                        else:
+                            index = self.interaction(participants, self.parse_ping(c_body))
+                            pings.append(index)
+
+                            if index != 0:
+                                self.num_of_interactions += 1
+                                question_with_interactions = 1
+                                answer_with_interactions = 1
+                                comment_with_interactions = 1
+
+                        participants.append(c_name)
+                        participants_dict[c_name] = c_idx + 1
                         self.num_of_comments_with_interactions += comment_with_interactions
                     # print(participants, pings)
                     # self.analytic_ping(pings)
@@ -109,16 +132,11 @@ class PingMatch:
 
             # 90 for fuzzy matching
             if score > 90:
-                if len(names) > 1 and self.matching(names[0], participants)[-1] is not None:
-                    # 显性 @Poster
-                    return 0, index
-                else:
-                    # 隐性 @Poster
-                    return None, index
+                return index
             else:
-                return None, None
+                return 0
         else:
-            return None, None
+            return 0
 
     @staticmethod
     def matching(query, choices):
