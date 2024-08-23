@@ -129,15 +129,16 @@ class PingMatch:
 
 
 class SEProcessor(DataProcessor, ABC):
-    def __init__(self, data_name: str='meta.stackexchange.com'):
+    def __init__(self, data_name: str='meta.stackexchange.com', limit: int=0):
         super(SEProcessor, self).__init__()
 
         self.ping_match = PingMatch()
 
         self.data_name = data_name
+        self.limit = limit
 
     def get_train_examples(self, data_dir: str) -> pd.DataFrame:
-        return self.create_examples(os.path.join(data_dir, self.data_name, self.data_name + '.xml'), limit=1)
+        return self.create_examples(os.path.join(data_dir, self.data_name, self.data_name + '.xml'))
 
     def get_dev_examples(self, data_dir: str) -> pd.DataFrame:
         pass
@@ -148,9 +149,8 @@ class SEProcessor(DataProcessor, ABC):
     def get_labels(self):
         pass
 
-    def create_examples(self, filepath: str, limit: int) -> pd.DataFrame:
-
-        for elem in tqdm(self.iterparse(filepath, limit), desc=f'Parsing {cprint(filepath)} XML file'):
+    def create_examples(self, filepath: str) -> pd.DataFrame:
+        for elem in tqdm(self.iterparse(filepath), desc=f'Parsing {cprint(filepath)} XML file'):
             # Answer
             for answer in elem.findall('Answer'):
                 if int(answer.attrib['COMMENT_COUNT']):
@@ -163,20 +163,19 @@ class SEProcessor(DataProcessor, ABC):
         # TODO Return a DataFrame
         pass
 
-    @staticmethod
-    def iterparse(filepath: str, limit: int=0) -> ET.Element:
+    def iterparse(self, filepath: str) -> ET.Element:
         content = ET.iterparse(filepath, events=('end',))
         _, root = next(content)
 
         n = 0
         for event, elem in content:
-            if limit:
+            if self.limit:
                 if elem.tag == 'Thread':
                     yield elem
                     root.clear()
 
                     n += 1
-                    if n == limit:
+                    if n == self.limit:
                         break
             else:
                 if elem.tag == 'Thread':
@@ -188,7 +187,7 @@ def main():
     data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
     data_name = 'meta.stackoverflow.com'
 
-    SEProcessor(data_name).get_train_examples(data_dir)
+    SEProcessor(data_name, limit=10).get_train_examples(data_dir)
 
 
 if __name__ == '__main__':
