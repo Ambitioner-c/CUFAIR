@@ -31,7 +31,12 @@ def cprint(content: str, color: str=None) -> str:
         'white_bg': '\033[47m',
     }
     if color is None:
-        color = random.choice(list(colors.values()))
+        while True:
+            color = random.choice(list(colors.keys()))
+            if color.endswith('_bg'):
+                continue
+            else:
+                break
     return f'{colors[color]}{content}\033[0m'
 
 
@@ -153,32 +158,32 @@ class PingMatch:
         print('\n', '-' * 100)
         print(f"{cprint('Poster', 'red_bg')}: ", participants[0])
 
-        symbols = ['_____' for _ in range(length)]
+        symbols = [' _____ ' for _ in range(length)]
         links = []
         for _, ping in enumerate(pings):
             if ping:
-                symbols[ping - 1] = '__|__'
-                symbols[_] = '__|__'
+                symbols[ping - 1] = ' _▂|▂_ '
+                symbols[_] = ' _▂|▂_ '
 
                 links.append([ping - 1, _])
         def connection(_link: [int, int]):
-            _symbols = ['     ' for _ in range(length)]
-            _symbols[_link[0]] = '  ___'
-            _symbols[_link[1]] = '___  '
+            _symbols = ['       ' for _ in range(length)]
+            _symbols[_link[0]] = '   ▂▂▂▂'
+            _symbols[_link[1]] = '▂▂▂▂   '
             for _ in range(_link[0] + 1, _link[1]):
-                _symbols[_] = '_____'
+                _symbols[_] = '▂▂▂▂▂▂▂'
             return _symbols
         for link in sorted(links, reverse=True):
-            print('     ', ' '.join(connection(link)))
-        print('     ', ' '.join(symbols))
+            print('       ', cprint(''.join(connection(link))))
+        print('       ', ''.join(symbols))
 
-        print(cprint('Name ', 'green_bg'), ' '.join([f'{x[:4]}.' for x in participants[1:]]))
+        print(cprint('Name   ', 'green_bg'), ''.join([f'  {x[:3]}. ' for x in participants[1:]]))
 
-        print(cprint('Index', 'yellow_bg'), ' '.join([f"{'   ' + str(index + 1) + '  '}"[-5:] for index in range(length)]))
+        print(cprint('Index  ', 'yellow_bg'), ''.join([f"{'    ' + str(index + 1) + '  '}"[-7:] for index in range(length)]))
 
-        print(cprint('Ping ', 'blue_bg'), ' '.join([f"{'   ' + str(ping) + '  '}"[-5:] for ping in pings]))
+        print(cprint('Ping   ', 'blue_bg'), ''.join([f"{'    ' + str(ping) + '  '}"[-7:] for ping in pings]))
 
-        print(cprint('Score', 'purple_bg'), ' '.join([f"{'   ' + str(score) + '  '}"[-5:] for score in scores]))
+        print(cprint('Score  ', 'purple_bg'), ''.join([f"{'    ' + str(score) + '  '}"[-7:] for score in scores]))
 
 
 class SEProcessor(DataProcessor, ABC):
