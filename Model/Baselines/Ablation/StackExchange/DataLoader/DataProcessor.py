@@ -187,7 +187,13 @@ class PingMatch:
 
 
 class SEProcessor(DataProcessor, ABC):
-    def __init__(self, data_name: str='meta.stackexchange.com', limit: int=0, show: bool=False):
+    def __init__(
+            self,
+            data_name: str='meta.stackexchange.com',
+            limit: int=0,
+            show: bool=False,
+            threshold: float=0.5
+    ):
         super(SEProcessor, self).__init__()
 
         self.ping_match = PingMatch()
@@ -195,6 +201,7 @@ class SEProcessor(DataProcessor, ABC):
         self.data_name = data_name
         self.limit = limit
         self.show = show
+        self.threshold = threshold
 
     def get_train_examples(self, data_dir: str) -> pd.DataFrame:
         return self.create_examples(os.path.join(data_dir, self.data_name, self.data_name + '.xml'))
@@ -217,8 +224,49 @@ class SEProcessor(DataProcessor, ABC):
                     if self.show:
                         self.ping_match.visualize(participants, pings, comments, scores)
 
+                    n_s_pairs, s_n_pairs, n_n_pairs = self.pair_nodes(pings, comments, scores)
+                    print(n_s_pairs)
+                    print(s_n_pairs)
+                    print(n_n_pairs)
+
         # TODO Return a DataFrame
         pass
+
+    def pair_nodes(self, pings: [int], comments: [str], scores: [int]) -> [[str, str], [str, str], [str, str]]:
+        average = sum(scores) / len(scores)
+
+        links: [[int, int]] = []
+        link_dict: dict[int: int] = {}
+        for _, ping in enumerate(pings):
+            if ping:
+                links.append([ping - 1, _])
+                link_dict[_] = ping - 1
+
+        n_s_pairs: [str, str] = []
+        s_n_pairs: [str, str] = []
+        n_n_pairs: [str, str] = []
+        def dig(_ping: int, content: str) -> str:
+            if _ping in link_dict:
+                content = comments[link_dict[_ping]] + ' ' + content
+                dig(link_dict[_ping], content)
+
+            return content
+
+        for link in links:
+            if scores[link[0]] > average or scores[link[1]] > average:
+                # N-S
+                if scores[link[0]] - scores[link[1]] >= self.threshold * average:
+                    n_s_pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
+
+                # S-N
+                if scores[link[1]] - scores[link[0]] >= self.threshold * average:
+                    s_n_pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
+
+                # N-N
+                if abs(scores[link[0]] - scores[link[1]]) < self.threshold * average:
+                    n_n_pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
+
+        return n_s_pairs, s_n_pairs, n_n_pairs
 
     def iterparse(self, filepath: str) -> ET.Element:
         content = ET.iterparse(filepath, events=('end',))
@@ -244,7 +292,12 @@ def main():
     data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
     data_name = 'meta.stackoverflow.com'
 
-    SEProcessor(data_name, limit=100, show=True).get_train_examples(data_dir)
+    SEProcessor(
+        data_name,
+        limit=1,
+        show=True,
+        threshold=0.5
+    ).get_train_examples(data_dir)
 
 
 if __name__ == '__main__':
