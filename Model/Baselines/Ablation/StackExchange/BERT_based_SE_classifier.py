@@ -215,8 +215,6 @@ def parse_args():
     parser.add_argument('--split', nargs='?', default=[0.8, 0.1, 0.1],
                         help='Split Data into Train, Dev, Test')
 
-
-
     return parser.parse_args()
 
 
