@@ -14,7 +14,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from torch.optim import Adam
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 
 import transformers
 from tqdm import tqdm
@@ -72,8 +72,86 @@ def get_metrics(input: np.array, target: np.array):
     return acc, pre, rec, f1
 
 
-def train():
-    pass
+def train(task_name, model, train_dataloader, dev_dataloader, epochs, lr, device, step):
+    temp_train_csv = f'./Result/Temp/{task_name}-{datetime.now().strftime("%Y%m%d_%H%M%S")}-train.csv'
+    temp_dev_csv = f'./Result/Temp/{task_name}-{datetime.now().strftime("%Y%m%d_%H%M%S")}-dev.csv'
+    finetuned_model_path = f'./FinetunedModel/{task_name}-{datetime.now().strftime("%Y%m%d_%H%M%S")}/bert-base-uncased'
+
+    model.to(device)
+
+    optimizer = Adam(model.parameters(), lr)
+    loss_function = nn.CrossEntropyLoss()
+
+    best_model = None
+    best_loss = float('inf')
+    best_acc, best_pre, best_rec, best_f1 = -1, -1, -1, -1
+
+    n = 0
+    for epoch in range(epochs):
+        for train_sample in tqdm(train_dataloader):
+            train_labels = train_sample['label']
+
+            optimizer.zero_grad()
+
+            train_output = model(train_sample)
+
+            train_loss = loss_function(input=train_output, target=train_labels.view(-1).to(device))
+            train_loss.backward()
+
+            optimizer.step()
+
+            temp_train_result = (f'{task_name}\t'
+                                 f'epoch/epochs:{epoch + 1}/{epochs}\t'
+                                 f'train_loss:{np.mean(train_loss.item())}')
+            with open(temp_train_csv, 'a' if os.path.exists(temp_train_csv) else 'w') as f:
+                f.write(temp_train_result + '\n')
+            # print(temp_train_result)
+
+            if n % step == 0:
+                dev_losses = []
+                dev_accs, dev_pres, dev_recs, dev_f1s = [], [], [], []
+                for dev_sample in dev_dataloader:
+                    dev_labels = dev_sample['label']
+                    with torch.no_grad():
+                        dev_output = model(dev_sample)
+
+                        dev_loss = loss_function(input=dev_output, target=dev_labels.view(-1).to(device))
+                        dev_acc, dev_pre, dev_rec, dev_f1 = get_metrics(dev_output.cpu().numpy(), dev_labels.cpu().numpy())
+
+                        dev_losses.append(dev_loss.item())
+                        dev_accs.append(dev_acc)
+                        dev_pres.append(dev_pre)
+                        dev_recs.append(dev_rec)
+                        dev_f1s.append(dev_f1)
+                temp_dev_result = (f'{task_name}\t'
+                                   f'epoch/epochs:{epoch + 1}/{epochs}\t'
+                                   f'dev_loss:{round(np.mean(dev_losses), 4)}\t'
+                                   f'dev_acc:{round(np.mean(dev_accs), 4)}\t'
+                                   f'dev_pre:{round(np.mean(dev_pres), 4)}\t'
+                                   f'dev_rec:{round(np.mean(dev_recs), 4)}\t'
+                                   f'dev_f1:{round(np.mean(dev_f1s), 4)}\t')
+                with open(temp_dev_csv, 'a' if os.path.exists(temp_dev_csv) else 'w') as f:
+                    f.write(temp_dev_result + '\n')
+                print(temp_dev_result)
+
+                if np.mean(dev_losses) < best_loss:
+                    best_loss = np.mean(dev_losses)
+                    best_acc = np.mean(dev_accs)
+                    best_pre = np.mean(dev_pres)
+                    best_rec = np.mean(dev_recs)
+                    best_f1 = np.mean(dev_f1s)
+                    best_model = copy.deepcopy(model)
+            n += 1
+
+    best_model.bert.save_pretrained(finetuned_model_path)
+    print(f'Best loss:{best_loss}\t'
+          f'Best acc:{best_acc}\t'
+          f'Best pre:{best_pre}\t'
+          f'Best rec:{best_rec}\t'
+          f'Best f1:{best_f1}\t')
+    print(f'Finetuned model path: {finetuned_model_path}')
+
+    return best_model
 
 
 def evaluate(task_name, model, test_dataloader):
@@ -112,13 +190,17 @@ def parse_args():
                         help='Pretrained model path')
     parser.add_argument('--finetuned_model_path', nargs='?', default='/home/cuifulai/Projects/CQA/Model/Baselines/Ablation/RST/FinetunedModel/RST-20240818_195316/bert-base-uncased',
                         help='Finetuned model path')
-    parser.add_argument('--batch_size', type=int, default=128,
+    parser.add_argument('--epochs', type=int, default=3,
+                        help='Number of epochs')
+    parser.add_argument('--batch_size', type=int, default=64,
                         help='Batch size')
     parser.add_argument('--max_length', type=int, default=256,
                         help='Max length')
+    parser.add_argument('--lr', type=float, default=2e-5,
+                        help='Learning rate')
     parser.add_argument('--seed', type=int, default=2024,
                         help='Random seed')
-    parser.add_argument('--device', nargs='?', default='cuda:0',
+    parser.add_argument('--device', nargs='?', default='cuda:1',
                         help='Device')
     parser.add_argument('--freeze', type=bool, default=False,
                         help='Freeze')
@@ -128,6 +210,10 @@ def parse_args():
                         help='Limit')
     parser.add_argument('--threshold', type=float, default=0.5,
                         help='Threshold')
+    parser.add_argument('--step', type=int, default=1,
+                        help='Step to evaluate')
+    parser.add_argument('--split', nargs='?', default=[0.8, 0.1, 0.1],
+                        help='Split Data into Train, Dev, Test')
 
 
 
@@ -152,16 +238,21 @@ def main():
         mode='All',
         max_length=args.max_length
     )
-    all_dataloader = DataLoader(all_dataset, batch_size=args.batch_size, shuffle=False)
+    train_dataset, dev_dataset, test_dataset = random_split(all_dataset, args.split)
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    dev_dataloader = DataLoader(dev_dataset, batch_size=args.batch_size, shuffle=False)
+    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
     model = RSTModel(
         freeze=args.freeze,
         pretrained_model_path=args.finetuned_model_path,
         device=device,
         num_labels=args.num_labels
-    ).to(device)
+    )
 
-    evaluate(args.task_name, model, all_dataloader)
+    best_model = train(args.task_name, model, train_dataloader, dev_dataloader, args.epochs, args.lr, device, args.step)
+
+    evaluate(args.task_name, best_model, test_dataloader)
 
 
 if __name__ == '__main__':
