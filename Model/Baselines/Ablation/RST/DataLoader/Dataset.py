@@ -68,7 +68,7 @@ class RSTDataset(Dataset):
 def main():
     data_dir = '/home/cuifulai/Projects/CQA/Data/RST/GUM'
 
-    pretrained_model_path = '/data/cuifulai/PretrainedModel'
+    pretrained_model_path = '/data/cuifulai/PretrainedModel/bert-base-uncased'
     tokenizer = AutoTokenizer.from_pretrained(pretrained_model_path)
 
     train_dataset = RSTDataset(tokenizer, data_dir, mode='Train', max_length=256)

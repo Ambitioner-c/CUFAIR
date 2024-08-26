@@ -184,7 +184,7 @@ def parse_args():
                         help='Task name')
     parser.add_argument('--data_dir', nargs='?', default='/home/cuifulai/Projects/CQA/Data/RST/GUM',
                         help='Data directory')
-    parser.add_argument('--pretrained_model_path', nargs='?', default='/data/cuifulai/PretrainedModel',
+    parser.add_argument('--pretrained_model_path', nargs='?', default='/data/cuifulai/PretrainedModel/bert-base-uncased',
                         help='Pretrained model path')
     parser.add_argument('--epochs', type=int, default=3,
                         help='Number of epochs')
