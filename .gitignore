@@ -17,8 +17,8 @@ gen
 # Pretrained model files
 **/PretrainedModel/
 
-# Fine-tuned model files
-**/FineTunedModel/
+# Finetuned model files
+**/FinetunedModel/
 
 # Model output files
 **/Result/
