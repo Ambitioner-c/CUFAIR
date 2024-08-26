@@ -240,8 +240,8 @@ def main():
     )
     train_dataset, dev_dataset, test_dataset = random_split(all_dataset, args.split)
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    dev_dataloader = DataLoader(dev_dataset, batch_size=args.batch_size, shuffle=False)
-    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    dev_dataloader = DataLoader(dev_dataset, batch_size=args.batch_size, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=True)
 
     model = RSTModel(
         freeze=args.freeze,

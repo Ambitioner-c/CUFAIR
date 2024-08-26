@@ -222,8 +222,8 @@ def main():
     test_dataset = RSTDataset(tokenizer, args.data_dir, mode='Test', max_length=args.max_length)
 
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    dev_dataloader = DataLoader(dev_dataset, batch_size=args.batch_size, shuffle=False)
-    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    dev_dataloader = DataLoader(dev_dataset, batch_size=args.batch_size, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=True)
 
     model = RSTModel(
         freeze=args.freeze,
