@@ -91,7 +91,7 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model_path)
 
     test_dataset = RSTDataset(tokenizer, args.data_dir, mode='Test', max_length=args.max_length)
-    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
     evaluate(args.task_name, test_dataloader)
 
