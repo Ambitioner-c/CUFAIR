@@ -14,6 +14,9 @@ import xml.etree.ElementTree as ET
 
 
 def cprint(content: str, color: str=None) -> str:
+    if color == 'None':
+        return content
+
     colors = {
         'red': '\033[31m',
         'green': '\033[32m',
@@ -152,11 +155,22 @@ class PingMatch:
             return None
 
     @staticmethod
-    def visualize(participants: [str], pings: [int], comments: [str], scores: [int]):
+    def visualize(participants: [str], pings: [int], scores: [int], a_id: str, show: bool=False, save: str=None):
+        if save:
+            f = open(save, 'a', encoding='utf-8')
+        else:
+            f = None
+
         length = len(pings)
 
-        print('\n', '-' * 100)
-        print(f"{cprint('Poster', 'red_bg')}: ", participants[0])
+        if show:
+            print(f"\n{'-' * 25}Answer ID: {a_id}{'-' * 25}")
+        if save:
+            print(f"{'-' * 25}Answer ID: {a_id}{'-' * 25}", file=f)
+        if show:
+            print(f"{cprint('Poster ', 'red_bg')}", participants[0])
+        if save:
+            print(f"{cprint('Poster ', 'None')}", participants[0], file=f)
 
         symbols = [' _____ ' for _ in range(length)]
         links = []
@@ -174,16 +188,37 @@ class PingMatch:
                 _symbols[_] = '▂▂▂▂▂▂▂'
             return _symbols
         for link in sorted(links, reverse=True):
-            print('       ', cprint(''.join(connection(link))))
-        print('       ', ''.join(symbols))
+            if show:
+                print('       ', cprint(''.join(connection(link))))
+            if save:
+                print('       ', cprint(''.join(connection(link)), 'None'), file=f)
+        if show:
+            print('       ', ''.join(symbols))
+        if save:
+            print('       ', ''.join(symbols), file=f)
 
-        print(cprint('Name   ', 'green_bg'), ''.join([f'  {x[:3]}. ' for x in participants[1:]]))
+        if show:
+            print(cprint('Name   ', 'green_bg'), ''.join([f'  {x[:3]}. ' for x in participants[1:]]))
+        if save:
+            print(cprint('Name   ', 'None'), ''.join([f'  {x[:3]}. ' for x in participants[1:]]), file=f)
 
-        print(cprint('Index  ', 'yellow_bg'), ''.join([f"{'    ' + str(index + 1) + '  '}"[-7:] for index in range(length)]))
+        if show:
+            print(cprint('Index  ', 'yellow_bg'), ''.join([f"{'    ' + str(index + 1) + '  '}"[-7:] for index in range(length)]))
+        if save:
+            print(cprint('Index  ', 'None'), ''.join([f"{'    ' + str(index + 1) + '  '}"[-7:] for index in range(length)]), file=f)
 
-        print(cprint('Ping   ', 'blue_bg'), ''.join([f"{'    ' + str(ping) + '  '}"[-7:] for ping in pings]))
+        if show:
+            print(cprint('Ping   ', 'blue_bg'), ''.join([f"{'    ' + str(ping) + '  '}"[-7:] for ping in pings]))
+        if save:
+            print(cprint('Ping   ', 'None'), ''.join([f"{'    ' + str(ping) + '  '}"[-7:] for ping in pings]), file=f)
 
-        print(cprint('Score  ', 'purple_bg'), ''.join([f"{'    ' + str(score) + '  '}"[-7:] for score in scores]))
+        if show:
+            print(cprint('Score  ', 'purple_bg'), ''.join([f"{'    ' + str(score) + '  '}"[-7:] for score in scores]))
+        if save:
+            print(cprint('Score  ', 'None'), ''.join([f"{'    ' + str(score) + '  '}"[-7:] for score in scores]), file=f)
+
+        if save:
+            f.close()
 
 
 class SEProcessor(DataProcessor, ABC):
@@ -192,6 +227,7 @@ class SEProcessor(DataProcessor, ABC):
             data_name: str='meta.stackexchange.com',
             limit: int=0,
             show: bool=False,
+            save: str=None,
             threshold: float=0.5
     ):
         super(SEProcessor, self).__init__()
@@ -201,6 +237,7 @@ class SEProcessor(DataProcessor, ABC):
         self.data_name = data_name
         self.limit = limit
         self.show = show
+        self.save = save
         self.threshold = threshold
 
     def get_train_examples(self, data_dir: str) -> pd.DataFrame:
@@ -221,13 +258,10 @@ class SEProcessor(DataProcessor, ABC):
             for answer in elem.findall('Answer'):
                 if int(answer.attrib['COMMENT_COUNT']):
                     participants, pings, comments, scores = self.ping_match.main(answer)
-                    if self.show:
-                        self.ping_match.visualize(participants, pings, comments, scores)
+                    if self.show or self.save:
+                        self.ping_match.visualize(participants, pings, scores, answer.attrib['ID'], self.show, self.save)
 
                     n_s_pairs, s_n_pairs, n_n_pairs = self.pair_nodes(pings, comments, scores)
-                    print(n_s_pairs)
-                    print(s_n_pairs)
-                    print(n_n_pairs)
 
         # TODO Return a DataFrame
         pass
@@ -292,10 +326,13 @@ def main():
     data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
     data_name = 'meta.stackoverflow.com'
 
+    save_path = f"../Result/Interaction/{data_name}.txt"
+
     SEProcessor(
         data_name,
         limit=1,
         show=True,
+        save=None,
         threshold=0.5
     ).get_train_examples(data_dir)
 
