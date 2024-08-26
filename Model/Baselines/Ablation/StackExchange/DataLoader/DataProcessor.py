@@ -240,8 +240,11 @@ class SEProcessor(DataProcessor, ABC):
         self.save = save
         self.threshold = threshold
 
-    def get_train_examples(self, data_dir: str) -> pd.DataFrame:
+    def get_all_examples(self, data_dir: str) -> pd.DataFrame:
         return self.create_examples(os.path.join(data_dir, self.data_name, self.data_name + '.xml'))
+
+    def get_train_examples(self, data_dir: str) -> pd.DataFrame:
+        pass
 
     def get_dev_examples(self, data_dir: str) -> pd.DataFrame:
         pass
@@ -253,6 +256,9 @@ class SEProcessor(DataProcessor, ABC):
         pass
 
     def create_examples(self, filepath: str) -> pd.DataFrame:
+        lefts = []
+        rights = []
+        labels = []
         for elem in tqdm(self.iterparse(filepath), desc=f'Parsing {cprint(filepath, 'red')} XML file'):
             # Answer
             for answer in elem.findall('Answer'):
@@ -263,8 +269,31 @@ class SEProcessor(DataProcessor, ABC):
 
                     n_s_pairs, s_n_pairs, n_n_pairs = self.pair_nodes(pings, comments, scores)
 
-        # TODO Return a DataFrame
-        pass
+                    # N-S
+                    for pair in n_s_pairs:
+                        lefts.append(pair[0])
+                        rights.append(pair[1])
+                        labels.append(0)
+
+                    # S-N
+                    for pair in s_n_pairs:
+                        lefts.append(pair[0])
+                        rights.append(pair[1])
+                        labels.append(1)
+
+                    # N-N
+                    for pair in n_n_pairs:
+                        lefts.append(pair[0])
+                        rights.append(pair[1])
+                        labels.append(2)
+
+        df = pd.DataFrame({
+            'left': lefts,
+            'right': rights,
+            'label': labels
+        })
+
+        return df
 
     def pair_nodes(self, pings: [int], comments: [str], scores: [int]) -> [[str, str], [str, str], [str, str]]:
         average = sum(scores) / len(scores)
@@ -328,13 +357,14 @@ def main():
 
     save_path = f"../Result/Interaction/{data_name}.txt"
 
-    SEProcessor(
+    df = SEProcessor(
         data_name,
-        limit=1,
-        show=True,
+        limit=10,
+        show=False,
         save=None,
         threshold=0.5
-    ).get_train_examples(data_dir)
+    ).get_all_examples(data_dir)
+    print(df.head(10).to_csv())
 
 
 if __name__ == '__main__':
