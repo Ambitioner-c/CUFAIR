@@ -5,8 +5,8 @@ from typing import Optional
 
 import pandas as pd
 from torch import Tensor
-from torch.utils.data import Dataset, DataLoader
-from transformers import PreTrainedTokenizer, AutoTokenizer
+from torch.utils.data import Dataset, DataLoader, random_split
+from transformers import PreTrainedTokenizer, AutoTokenizer, set_seed
 
 from Model.Baselines.Ablation.StackExchange.DataLoader.DataProcessor import SEProcessor
 
@@ -33,16 +33,16 @@ class SEDataset(Dataset):
 
         self.mode = mode
         if self.mode == 'All':
-            df = self.processor.get_all_examples(data_dir)
+            self.df = self.processor.get_all_examples(data_dir)
         elif self.mode == 'Train':
-            df = self.processor.get_train_examples(data_dir)
+            self.df = self.processor.get_train_examples(data_dir)
         elif self.mode == 'Dev':
-            df = self.processor.get_dev_examples(data_dir)
+            self.df = self.processor.get_dev_examples(data_dir)
         else:
-            df = self.processor.get_test_examples(data_dir)
+            self.df = self.processor.get_test_examples(data_dir)
 
-        self.features = self.convert_examples_to_features(df, tokenizer, max_length)
-        self.labels = Tensor(df['label']).long()
+        self.features = self.convert_examples_to_features(self.df, tokenizer, max_length)
+        self.labels = Tensor(self.df['label']).long()
 
     @staticmethod
     def convert_examples_to_features(
@@ -75,6 +75,8 @@ class SEDataset(Dataset):
 
 
 def main():
+    set_seed(2024)
+
     data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
     data_name = 'meta.stackoverflow.com'
 
@@ -98,6 +100,13 @@ def main():
         print(label)
 
         break
+
+
+    train_dataset, dev_dataset, test_dataset = random_split(all_dataset, [0.8, 0.1, 0.1])
+
+    print('Train: ', all_dataset.df.iloc[train_dataset.indices]['label'].value_counts())
+    print('Dev: ', all_dataset.df.iloc[dev_dataset.indices]['label'].value_counts())
+    print('Test: ', all_dataset.df.iloc[test_dataset.indices]['label'].value_counts())
 
 
 if __name__ == '__main__':
