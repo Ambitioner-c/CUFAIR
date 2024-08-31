@@ -74,11 +74,10 @@ class BertSelfAttention(nn.Module):
             self,
             hidden_size: int = 768,
             num_attention_heads: int = 12,
-            embedding_size: int = None,
             attention_probs_dropout_prob: float = 0.1,
     ):
         super().__init__()
-        if hidden_size % num_attention_heads != 0 and embedding_size is None:
+        if hidden_size % num_attention_heads != 0:
             raise ValueError(
                 f"The hidden size ({hidden_size}) is not a multiple of the number of attention heads ({num_attention_heads})"
             )
@@ -159,13 +158,12 @@ class BertAttention(nn.Module):
             self,
             hidden_size: int = 768,
             num_attention_heads: int = 12,
-            embedding_size: int = None,
             attention_probs_dropout_prob: float = 0.1,
             layer_norm_eps: float = 1e-12,
             hidden_dropout_prob: float = 0.1
     ):
         super().__init__()
-        self.self = BertSelfAttention(hidden_size, num_attention_heads, embedding_size, attention_probs_dropout_prob)
+        self.self = BertSelfAttention(hidden_size, num_attention_heads, attention_probs_dropout_prob)
         self.output = BertSelfOutput(hidden_size, layer_norm_eps, hidden_dropout_prob)
         self.pruned_heads = set()
 
