@@ -127,7 +127,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
     args_path = f'./Result/Temp/{task_name}-{timestamp}/args.json'
     temp_train_csv = f'./Result/Temp/{task_name}-{timestamp}/train.csv'
     temp_dev_csv = f'./Result/Temp/{task_name}-{timestamp}/dev.csv'
-    finetuned_model_path = f'./FinetunedModel/{task_name}-{timestamp}'
+    finetuned_model_path = f'./FinetunedModel/{task_name}-{timestamp}/best_model.pth'
     finetuned_bert_model_path = f'./FinetunedModel/{task_name}-{timestamp}/bert-base-uncased'
 
     save_args_to_file(args, mkdir(args_path))
