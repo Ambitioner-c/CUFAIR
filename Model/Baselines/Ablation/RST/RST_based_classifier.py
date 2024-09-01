@@ -3,6 +3,7 @@
 # @Time: 2024/8/16 19:53
 import argparse
 import copy
+import json
 import os
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
@@ -24,8 +25,7 @@ transformers.logging.set_verbosity_error()
 from transformers import (
     set_seed,
     AutoTokenizer,
-    BertModel,
-    AutoConfig
+    BertModel
 )
 
 from Model.Baselines.Ablation.RST.DataLoader.Dataset import RSTDataset
@@ -46,29 +46,36 @@ simplefilter(action='ignore', category=UserWarning)
 
 
 class RSTModel(nn.Module):
-    def __init__(self, freeze=False, pretrained_model_path=None, device=None, num_labels=2):
+    def __init__(
+            self,
+            freeze: bool = False,
+            pretrained_model_name_or_path: str = 'bert-base-uncased',
+            device: torch.device= torch.device('cuda:0'),
+            num_labels: int = 3,
+            hidden_size: int = 768,
+            num_attention_heads: int = 12,
+            dropout_prob: float = 0.1
+    ):
         super(RSTModel, self).__init__()
         self.device = device
 
-        self.bert = BertModel.from_pretrained(pretrained_model_path)
+        self.bert = BertModel.from_pretrained(pretrained_model_name_or_path)
         for p in self.bert.parameters():
             p.data = p.data.contiguous()
-
-        self.config = AutoConfig.from_pretrained(pretrained_model_path)
 
         if freeze:
             for p in self.bert.parameters():
                 p.requires_grad = False
 
         self.self_attention = BertSelfAttention(
-            self.config.hidden_size,
-            self.config.num_attention_heads,
-            self.config.attention_probs_dropout_prob
+            hidden_size,
+            num_attention_heads,
+            dropout_prob
         )
 
-        self.dropout = nn.Dropout(self.config.hidden_dropout_prob)
+        self.dropout = nn.Dropout(dropout_prob)
 
-        self.classifier = nn.Linear(self.config.hidden_size * 2, num_labels)
+        self.classifier = nn.Linear(hidden_size * 2, num_labels)
 
     def forward(self, sample: pd.DataFrame):
         x_left = sample['left'].to(self.device)
@@ -101,10 +108,20 @@ def get_metrics(input: np.array, target: np.array):
     return acc, pre, rec, f1
 
 
-def train(task_name, model, train_dataloader, dev_dataloader, epochs, lr, device, step):
-    temp_train_csv = f'./Result/Temp/{task_name}-{datetime.now().strftime("%Y%m%d_%H%M%S")}-train.csv'
-    temp_dev_csv = f'./Result/Temp/{task_name}-{datetime.now().strftime("%Y%m%d_%H%M%S")}-dev.csv'
-    finetuned_model_path = f'./FinetunedModel/{task_name}-{datetime.now().strftime("%Y%m%d_%H%M%S")}/bert-base-uncased'
+def save_args_to_file(args, file_path):
+    args_dict = vars(args)
+
+    with open(file_path, 'w') as f:
+        json.dump(args_dict, f, indent=4)
+
+
+def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, device, step):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    save_args_to_file(args, f'./Result/Temp/{task_name}-{timestamp}-args.json')
+    temp_train_csv = f'./Result/Temp/{task_name}-{timestamp}-train.csv'
+    temp_dev_csv = f'./Result/Temp/{task_name}-{timestamp}-dev.csv'
+    finetuned_model_path = f'./FinetunedModel/{task_name}-{timestamp}/bert-base-uncased'
 
     model.to(device)
 
@@ -209,7 +226,7 @@ def evaluate(task_name, model, test_dataloader):
 def parse_args():
     parser = argparse.ArgumentParser(description='RST-based Classifier')
 
-    parser.add_argument('--task_name', nargs='?', default='RST',
+    parser.add_argument('--task_name', nargs='?', default='RST_based_classifier',
                         help='Task name')
     parser.add_argument('--data_dir', nargs='?', default='/home/cuifulai/Projects/CQA/Data/RST/GUM',
                         help='Data directory')
@@ -217,8 +234,14 @@ def parse_args():
                         help='Pretrained model path')
     parser.add_argument('--epochs', type=int, default=3,
                         help='Number of epochs')
-    parser.add_argument('--batch_size', type=int, default=32,
+    parser.add_argument('--batch_size', type=int, default=64,
                         help='Batch size')
+    parser.add_argument('--hidden_size', type=int, default=768,
+                        help='Hidden size')
+    parser.add_argument('--num_attention_heads', type=int, default=12,
+                        help='Number of attention heads')
+    parser.add_argument('--dropout_prob', type=float, default=0.1,
+                        help='Dropout probability')
     parser.add_argument('--max_length', type=int, default=128,
                         help='Max length')
     parser.add_argument('--lr', type=float, default=2e-5,
@@ -256,12 +279,15 @@ def main():
 
     model = RSTModel(
         freeze=args.freeze,
-        pretrained_model_path=args.pretrained_model_path,
+        pretrained_model_name_or_path=args.pretrained_model_path,
         device=device,
-        num_labels=args.num_labels
+        num_labels=args.num_labels,
+        hidden_size=args.hidden_size,
+        num_attention_heads=args.num_attention_heads,
+        dropout_prob=args.dropout_prob
     )
 
-    best_model = train(args.task_name, model, train_dataloader, dev_dataloader, args.epochs, args.lr, device, args.step)
+    best_model = train(args, args.task_name, model, train_dataloader, dev_dataloader, args.epochs, args.lr, device, args.step)
 
     evaluate(args.task_name, best_model, test_dataloader)
 
