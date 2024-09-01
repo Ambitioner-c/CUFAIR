@@ -234,7 +234,7 @@ def parse_args():
                         help='Pretrained model path')
     parser.add_argument('--epochs', type=int, default=3,
                         help='Number of epochs')
-    parser.add_argument('--batch_size', type=int, default=64,
+    parser.add_argument('--batch_size', type=int, default=128,
                         help='Batch size')
     parser.add_argument('--hidden_size', type=int, default=768,
                         help='Hidden size')
