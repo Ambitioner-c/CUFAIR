@@ -24,7 +24,7 @@ transformers.logging.set_verbosity_error()
 from transformers import (
     set_seed,
     AutoTokenizer,
-    BertForSequenceClassification,
+    BertModel,
     AutoConfig
 )
 
@@ -35,6 +35,10 @@ from Model.Unit.metrics import (
     recall_score,
     f1_score,
 )
+from Model.Unit.modeling_bert import (
+    BertSelfAttention,
+)
+
 
 from warnings import simplefilter
 simplefilter(action='ignore', category=FutureWarning)
@@ -46,7 +50,7 @@ class RSTModel(nn.Module):
         super(RSTModel, self).__init__()
         self.device = device
 
-        self.bert = BertForSequenceClassification.from_pretrained(pretrained_model_path, num_labels=num_labels)
+        self.bert = BertModel.from_pretrained(pretrained_model_path)
         for p in self.bert.parameters():
             p.data = p.data.contiguous()
 
@@ -56,11 +60,36 @@ class RSTModel(nn.Module):
             for p in self.bert.parameters():
                 p.requires_grad = False
 
-    def forward(self, sample: pd.DataFrame):
-        feature = sample['feature'].to(self.device)
-        output = self.bert(feature).logits
+        self.self_attention = BertSelfAttention(
+            self.config.hidden_size,
+            self.config.num_attention_heads,
+            self.config.attention_probs_dropout_prob
+        )
 
-        return output
+        self.dropout = nn.Dropout(self.config.hidden_dropout_prob)
+
+        self.classifier = nn.Linear(self.config.hidden_size * 2, num_labels)
+
+    def forward(self, sample: pd.DataFrame):
+        x_left = sample['left'].to(self.device)
+        x_right = sample['right'].to(self.device)
+
+        left_init = self.dropout(
+            self.bert(x_left)['pooler_output']
+        )
+        right_init = self.dropout(
+            self.bert(x_right)['pooler_output']
+        )
+
+        left_right = self.dropout(
+            self.self_attention(
+                torch.stack([left_init, right_init], dim=1)
+            )[0]
+        )
+
+        outputs = self.classifier(torch.flatten(left_right, start_dim=1))
+
+        return outputs
 
 
 def get_metrics(input: np.array, target: np.array):
@@ -190,7 +219,7 @@ def parse_args():
                         help='Number of epochs')
     parser.add_argument('--batch_size', type=int, default=32,
                         help='Batch size')
-    parser.add_argument('--max_length', type=int, default=256,
+    parser.add_argument('--max_length', type=int, default=128,
                         help='Max length')
     parser.add_argument('--lr', type=float, default=2e-5,
                         help='Learning rate')
