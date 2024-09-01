@@ -108,6 +108,12 @@ def get_metrics(input: np.array, target: np.array):
     return acc, pre, rec, f1
 
 
+def mkdir(file_path: str) -> str:
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+    return file_path
+
+
 def save_args_to_file(args, file_path):
     args_dict = vars(args)
 
@@ -118,10 +124,13 @@ def save_args_to_file(args, file_path):
 def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, device, step):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    save_args_to_file(args, f'./Result/Temp/{task_name}-{timestamp}-args.json')
-    temp_train_csv = f'./Result/Temp/{task_name}-{timestamp}-train.csv'
-    temp_dev_csv = f'./Result/Temp/{task_name}-{timestamp}-dev.csv'
-    finetuned_model_path = f'./FinetunedModel/{task_name}-{timestamp}/bert-base-uncased'
+    args_path = f'./Result/Temp/{task_name}-{timestamp}/args.json'
+    temp_train_csv = f'./Result/Temp/{task_name}-{timestamp}/train.csv'
+    temp_dev_csv = f'./Result/Temp/{task_name}-{timestamp}/dev.csv'
+    finetuned_model_path = f'./FinetunedModel/{task_name}-{timestamp}'
+    finetuned_bert_model_path = f'./FinetunedModel/{task_name}-{timestamp}/bert-base-uncased'
+
+    save_args_to_file(args, mkdir(args_path))
 
     model.to(device)
 
@@ -149,7 +158,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
             temp_train_result = (f'{task_name}\t'
                                  f'epoch/epochs:{epoch + 1}/{epochs}\t'
                                  f'train_loss:{np.mean(train_loss.item())}')
-            with open(temp_train_csv, 'a' if os.path.exists(temp_train_csv) else 'w') as f:
+            with open(mkdir(temp_train_csv), 'a' if os.path.exists(temp_train_csv) else 'w') as f:
                 f.write(temp_train_result + '\n')
             # print(temp_train_result)
 
@@ -176,7 +185,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
                                    f'dev_pre:{round(np.mean(dev_pres), 4)}\t'
                                    f'dev_rec:{round(np.mean(dev_recs), 4)}\t'
                                    f'dev_f1:{round(np.mean(dev_f1s), 4)}\t')
-                with open(temp_dev_csv, 'a' if os.path.exists(temp_dev_csv) else 'w') as f:
+                with open(mkdir(temp_dev_csv), 'a' if os.path.exists(temp_dev_csv) else 'w') as f:
                     f.write(temp_dev_result + '\n')
                 print(temp_dev_result)
 
@@ -189,13 +198,15 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
                     best_model = copy.deepcopy(model)
             n += 1
 
-    best_model.bert.save_pretrained(finetuned_model_path)
+    torch.save(best_model.state_dict(), mkdir(finetuned_model_path))
+    best_model.bert.save_pretrained(mkdir(finetuned_bert_model_path))
     print(f'Best loss:{best_loss}\t'
           f'Best acc:{best_acc}\t'
           f'Best pre:{best_pre}\t'
           f'Best rec:{best_rec}\t'
           f'Best f1:{best_f1}\t')
     print(f'Finetuned model path: {finetuned_model_path}')
+    print(f'Finetuned bert model path: {finetuned_bert_model_path}')
 
     return best_model
 
