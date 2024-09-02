@@ -267,7 +267,9 @@ def parse_args():
                         help='Number of labels')
     parser.add_argument('--step', type=int, default=1,
                         help='Step')
-    parser.add_argument('--is_train', type=bool, default=False,
+    parser.add_argument('--is_from_finetuned', type=bool, default=True,
+                        help='Is from finetuned')
+    parser.add_argument('--is_train', type=bool, default=True,
                         help='Is train')
 
     return parser.parse_args()
@@ -300,9 +302,9 @@ def main():
         dropout_prob=args.dropout_prob
     ).to(device)
 
-    if not args.is_train:
+    if args.is_from_finetuned:
         model.load_state_dict(torch.load(args.finetuned_model_path))
-    else:
+    if args.is_train:
         model = train(args, args.task_name, model, train_dataloader, dev_dataloader, args.epochs, args.lr, device, args.step)
 
     evaluate(args.task_name, model, test_dataloader)
