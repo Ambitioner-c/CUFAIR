@@ -65,15 +65,15 @@ def evaluate(task_name, test_dataloader):
 def parse_args():
     parser = argparse.ArgumentParser(description='Random-based Classifier')
 
-    parser.add_argument('--task_name', nargs='?', default='Random',
+    parser.add_argument('--task_name', nargs='?', default='random_based_classifier',
                         help='Task name')
     parser.add_argument('--data_dir', nargs='?', default='/home/cuifulai/Projects/CQA/Data/RST/GUM',
                         help='Data directory')
-    parser.add_argument('--pretrained_model_path', nargs='?', default='/data/cuifulai/PretrainedModel',
+    parser.add_argument('--pretrained_model_path', nargs='?', default='/data/cuifulai/PretrainedModel/bert-base-uncased',
                         help='Pretrained model path')
-    parser.add_argument('--max_length', type=int, default=256,
+    parser.add_argument('--max_length', type=int, default=128,
                         help='Max length')
-    parser.add_argument('--batch_size', type=int, default=32,
+    parser.add_argument('--batch_size', type=int, default=128,
                         help='Batch size')
     parser.add_argument('--seed', type=int, default=2024,
                         help='Random seed')
