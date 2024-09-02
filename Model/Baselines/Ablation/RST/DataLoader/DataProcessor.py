@@ -376,28 +376,36 @@ def pair_nodes(nodes: {str: Node}):
 
 
 class RSTProcessor(DataProcessor, ABC):
-    def __init__(self):
+    def __init__(
+            self,
+            types: list = None
+    ):
         super(RSTProcessor, self).__init__()
 
+        self.types = types
+
     def get_train_examples(self, data_dir: str):
-        return self.create_examples([os.path.join(data_dir, 'Train', x) for x in sorted(os.listdir(data_dir + '/Train'))])
+        return self.create_examples([os.path.join(data_dir, 'Train', x) for x in sorted(os.listdir(data_dir + '/Train'))], self.types)
 
 
     def get_dev_examples(self, data_dir: str):
-        return self.create_examples([os.path.join(data_dir, 'Dev', x) for x in sorted(os.listdir(data_dir + '/Dev'))])
+        return self.create_examples([os.path.join(data_dir, 'Dev', x) for x in sorted(os.listdir(data_dir + '/Dev'))], self.types)
 
     def get_test_examples(self, data_dir: str):
-        return self.create_examples([os.path.join(data_dir, 'Test', x) for x in sorted(os.listdir(data_dir + '/Test'))])
+        return self.create_examples([os.path.join(data_dir, 'Test', x) for x in sorted(os.listdir(data_dir + '/Test'))], self.types)
 
     def get_labels(self):
         pass
 
     @staticmethod
-    def create_examples(filepaths: list) -> pd.DataFrame:
+    def create_examples(filepaths: list, types: list = None) -> pd.DataFrame:
         lefts = []
         rights = []
         labels = []
         for filepath in filepaths:
+            if types:
+                if not any([x in filepath for x in types]):
+                    continue
             elements, _, _ = read_rst(filepath, rel_hash={})
             n_s_pairs, s_n_pairs, n_n_pairs = pair_nodes(elements)
 
@@ -432,14 +440,16 @@ class RSTProcessor(DataProcessor, ABC):
 def main():
     data_dir = '/home/cuifulai/Projects/CQA/Data/RST/GUM'
 
-    df = RSTProcessor().get_train_examples(data_dir)
+    processor = RSTProcessor(types=['conversation', 'interview'])
+
+    df = processor.get_train_examples(data_dir)
     # print(df.head(10).to_csv())
     print('Train: ', df['label'].value_counts())
 
-    df = RSTProcessor().get_dev_examples(data_dir)
+    df = processor.get_dev_examples(data_dir)
     print('Dev: ', df['label'].value_counts())
 
-    df = RSTProcessor().get_test_examples(data_dir)
+    df = processor.get_test_examples(data_dir)
     print('Test: ', df['label'].value_counts())
 
 
