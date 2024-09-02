@@ -45,7 +45,7 @@ class Annotator:
             self,
             prompt: str,
             content: str,
-            model_name: str = "gpt-4o",
+            model_name: str = "gpt-4o-2024-08-06",
             temperature: float = 0.0,
             seed: int = 2024,
             max_tokens: int = 256
@@ -119,7 +119,7 @@ def parse_args():
                        help='Limit')
     parser.add_argument('--threshold', type=float, default=0.5,
                         help='Threshold')
-    parser.add_argument('--model_name', nargs='?', default="gpt-4o",
+    parser.add_argument('--model_name', nargs='?', default="gpt-4o-2024-08-06",
                         help='Model name')
     parser.add_argument('--temperature', type=float, default=0.0,
                         help='Temperature')
