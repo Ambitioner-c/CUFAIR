@@ -22,3 +22,6 @@ gen
 
 # Model output files
 **/Result/
+
+# Configuration files
+**/*.ini

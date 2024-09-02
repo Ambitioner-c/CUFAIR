@@ -2,6 +2,7 @@
 # @Author: Fulai Cui (cuifulai@mail.hfut.edu.cn)
 # @Time: 2024/9/1 10:28
 import argparse
+import configparser
 import json
 
 import openai
@@ -32,9 +33,9 @@ class Annotation(BaseModel):
 class Annotator:
     def __init__(
             self,
-            args: argparse.Namespace
+            configs: dict
     ):
-        self.client: OpenAI = self.get_client(api_key=args.api_key, base_url=args.base_url)
+        self.client: OpenAI = self.get_client(api_key=configs["api_key"], base_url=configs["base_url"])
 
     @staticmethod
     def get_client(api_key: str, base_url: str) -> OpenAI:
@@ -90,6 +91,15 @@ class Annotator:
                 pass
 
 
+def get_configs(config_path: str) -> dict:
+    parser = configparser.RawConfigParser()
+    parser.read(config_path)
+    return {
+        'api_key': parser.get('OpenAI API', 'api_key'),
+        'base_url': parser.get('OpenAI API', 'base_url')
+    }
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='GPT generated annotations')
 
@@ -101,16 +111,14 @@ def parse_args():
                         help='Data name')
     parser.add_argument('--prompt_path', nargs='?', default='/home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Annotation/prompt.txt',
                         help='Prompt path')
+    parser.add_argument('--config_path', nargs='?', default='/home/cuifulai/Projects/CQA/config.ini',
+                        help='Config path')
     parser.add_argument('--seed', type=int, default=2024,
                         help='Random seed')
     parser.add_argument('--limit', type=int, default=0,
                        help='Limit')
     parser.add_argument('--threshold', type=float, default=0.5,
                         help='Threshold')
-    parser.add_argument('--api_key', nargs='?', default="sk-UO5jegCvpXKNwOxq35F97097F83145C68e951116600c2b4e",
-                        help='API key')
-    parser.add_argument('--base_url', nargs='?', default="https://api.132006.xyz/v1/",
-                        help='Base URL')
     parser.add_argument('--model_name', nargs='?', default="gpt-4o",
                         help='Model name')
     parser.add_argument('--temperature', type=float, default=0.0,
@@ -135,6 +143,8 @@ def get_content(left: str, right: str):
 
 def main():
     args = parse_args()
+    configs = get_configs(args.config_path)
+
     set_seed(args.seed)
 
     left = "In this case, I should get more of those."
@@ -143,7 +153,7 @@ def main():
     prompt = get_prompt(file_path=args.prompt_path)
     content = get_content(left=left, right=right)
 
-    annotator = Annotator(args=args)
+    annotator = Annotator(configs=configs)
     response: str = annotator.get_response(
         prompt=prompt,
         content=content,
