@@ -271,6 +271,8 @@ def parse_args():
                         help='Is from finetuned')
     parser.add_argument('--is_train', type=bool, default=True,
                         help='Is train')
+    parser.add_argument('--gum_types', nargs='?', default=None,
+                        help='GUM types')
 
     return parser.parse_args()
 
@@ -284,9 +286,9 @@ def main():
 
     tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model_path)
 
-    train_dataset = RSTDataset(tokenizer, args.data_dir, mode='Train', max_length=args.max_length)
-    dev_dataset = RSTDataset(tokenizer, args.data_dir, mode='Dev', max_length=args.max_length)
-    test_dataset = RSTDataset(tokenizer, args.data_dir, mode='Test', max_length=args.max_length)
+    train_dataset = RSTDataset(tokenizer, args.data_dir, mode='Train', max_length=args.max_length, types=args.gum_types)
+    dev_dataset = RSTDataset(tokenizer, args.data_dir, mode='Dev', max_length=args.max_length, types=args.gum_types)
+    test_dataset = RSTDataset(tokenizer, args.data_dir, mode='Test', max_length=args.max_length, types=args.gum_types)
 
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     dev_dataloader = DataLoader(dev_dataset, batch_size=args.batch_size, shuffle=True)

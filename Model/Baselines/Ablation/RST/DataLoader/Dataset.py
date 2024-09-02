@@ -19,10 +19,11 @@ class RSTDataset(Dataset):
             self,
             tokenizer: PreTrainedTokenizer,
             data_dir: str,
-            mode: str='Train',
-            max_length: Optional[int]=None
+            mode: str = 'Train',
+            max_length: Optional[int] = None,
+            types: [str] = None,
     ):
-        self.processor = RSTProcessor()
+        self.processor = RSTProcessor(types)
 
         self.mode = mode
         if self.mode == 'Train':
@@ -39,7 +40,7 @@ class RSTDataset(Dataset):
     def convert_examples_to_features(
             examples: pd.DataFrame,
             tokenizer: PreTrainedTokenizer,
-            max_length: Optional[int]=None,
+            max_length: Optional[int] = None,
     ) -> [Tensor]:
         if max_length is None:
             max_length = tokenizer.model_max_length
@@ -89,7 +90,7 @@ def main():
     pretrained_model_path = '/data/cuifulai/PretrainedModel/bert-base-uncased'
     tokenizer = AutoTokenizer.from_pretrained(pretrained_model_path)
 
-    train_dataset = RSTDataset(tokenizer, data_dir, mode='Train', max_length=128)
+    train_dataset = RSTDataset(tokenizer, data_dir, mode='Train', max_length=128, types=['conversation', 'interview'])
     train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
     for example in train_dataloader:
         left_feature = example['left']
