@@ -132,8 +132,6 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
 
     save_args_to_file(args, mkdir(args_path))
 
-    model.to(device)
-
     optimizer = Adam(model.parameters(), lr)
     loss_function = nn.CrossEntropyLoss()
 
@@ -243,6 +241,8 @@ def parse_args():
                         help='Data directory')
     parser.add_argument('--pretrained_model_path', nargs='?', default='/data/cuifulai/PretrainedModel/bert-base-uncased',
                         help='Pretrained model path')
+    parser.add_argument('--finetuned_model_path', nargs='?', default='/home/cuifulai/Projects/CQA/Model/Baselines/Ablation/RST/FinetunedModel/RST_based_classifier-20240901_183825/best_model.pth',
+                        help='Finetuned model path')
     parser.add_argument('--epochs', type=int, default=3,
                         help='Number of epochs')
     parser.add_argument('--batch_size', type=int, default=128,
@@ -267,6 +267,8 @@ def parse_args():
                         help='Number of labels')
     parser.add_argument('--step', type=int, default=1,
                         help='Step')
+    parser.add_argument('--is_train', type=bool, default=False,
+                        help='Is train')
 
     return parser.parse_args()
 
@@ -296,11 +298,14 @@ def main():
         hidden_size=args.hidden_size,
         num_attention_heads=args.num_attention_heads,
         dropout_prob=args.dropout_prob
-    )
+    ).to(device)
 
-    best_model = train(args, args.task_name, model, train_dataloader, dev_dataloader, args.epochs, args.lr, device, args.step)
+    if not args.is_train:
+        model.load_state_dict(torch.load(args.finetuned_model_path))
+    else:
+        model = train(args, args.task_name, model, train_dataloader, dev_dataloader, args.epochs, args.lr, device, args.step)
 
-    evaluate(args.task_name, best_model, test_dataloader)
+    evaluate(args.task_name, model, test_dataloader)
 
 
 if __name__ == '__main__':
