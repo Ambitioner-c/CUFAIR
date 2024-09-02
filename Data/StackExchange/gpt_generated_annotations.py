@@ -19,11 +19,10 @@ class Relation(BaseModel):
 class Detail(BaseModel):
     type: str
     content: str
-    explain: str
+    explanation: str
 
 
 class Annotation(BaseModel):
-    id: int
     relation: Relation
     left: Detail
     right: Detail
@@ -45,12 +44,13 @@ class Annotator:
             self,
             prompt: str,
             content: str,
-            model_name: str = "gpt-4o-2024-08-06",
+            model_name: str = "gpt-4o",
             temperature: float = 0.0,
+            seed: int = 2024,
             max_tokens: int = 256
-    ) -> Annotation:
+    ) -> str:
         try:
-            completion = self.client.beta.chat.completions.parse(
+            completion = self.client.chat.completions.create(
                 model=model_name,
                 messages=[
                     {
@@ -66,14 +66,15 @@ class Annotator:
                         "content": content
                     }
                 ],
-                response_format=Annotation,
+                response_format={"type": "json_object"},
                 temperature=temperature,
+                seed=seed,
                 max_tokens=max_tokens,
             )
-
             response = completion.choices[0].message
-            if response.parsed:
-                return response.parsed
+
+            if response.content:
+                return response.content
             elif response.refusal:
                 # handle refusal
                 print(response.refusal)
@@ -98,7 +99,7 @@ def parse_args():
                         help='Data directory')
     parser.add_argument('--data_name', nargs='?', default='meta.stackoverflow.com',
                         help='Data name')
-    parser.add_argument('--prompt_path', nargs='?', default='/home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Annotation/prompt.md',
+    parser.add_argument('--prompt_path', nargs='?', default='/home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Annotation/prompt.txt',
                         help='Prompt path')
     parser.add_argument('--seed', type=int, default=2024,
                         help='Random seed')
@@ -110,8 +111,12 @@ def parse_args():
                         help='API key')
     parser.add_argument('--base_url', nargs='?', default="https://api.132006.xyz/v1/",
                         help='Base URL')
-    parser.add_argument('--model_name', nargs='?', default="gpt-4o-2024-08-06",
+    parser.add_argument('--model_name', nargs='?', default="gpt-4o",
                         help='Model name')
+    parser.add_argument('--temperature', type=float, default=0.0,
+                        help='Temperature')
+    parser.add_argument('--max_tokens', type=int, default=1024,
+                        help='Max tokens')
 
     return parser.parse_args()
 
@@ -132,19 +137,29 @@ def main():
     args = parse_args()
     set_seed(args.seed)
 
-    left = 'Where is your mod diamond?'
-    right = '@HamZa She only has it on the Meta.'
+    left = "In this case, I should get more of those."
+    right = "@bfavaretto Caching, always caching. Wait a few minutes."
 
     prompt = get_prompt(file_path=args.prompt_path)
     content = get_content(left=left, right=right)
 
     annotator = Annotator(args=args)
-    response = annotator.get_response(
+    response: str = annotator.get_response(
         prompt=prompt,
         content=content,
-        model_name=args.model_name
+        model_name=args.model_name,
+        temperature=args.temperature,
+        seed=args.seed,
+        max_tokens=args.max_tokens
     )
-    print(response)
+
+    try:
+        response = json.loads(response)
+    except json.decoder.JSONDecodeError as e:
+        print(e)
+
+    annotation = Annotation.model_validate(response)
+    print(annotation)
 
 
 if __name__ == '__main__':
