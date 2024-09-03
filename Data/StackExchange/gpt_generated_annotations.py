@@ -190,7 +190,7 @@ def parse_args():
                         help='Max tokens')
     parser.add_argument('--sample_size', type=int, default=200,
                         help='Sample size')
-    parser.add_argument('--error', type=Optional[int], default=109,
+    parser.add_argument('--error', type=Optional[int], default=117,
                         help='Error')
 
     return parser.parse_args()
@@ -228,7 +228,7 @@ def main():
             row: json = json.loads(response)
         except json.decoder.JSONDecodeError:
             try:
-                row: json = json.loads(response.replace(r'\"', '"'))
+                row: json = json.loads(response.replace(r'\\', '\\').replace(r'\"', '"'))
             except json.decoder.JSONDecodeError:
                 print(f"{coloring('Error', 'yellow_bg')}: {coloring(str(idx), 'red')}")
                 print(f"{coloring('json.decoder.JSONDecodeError')}")
