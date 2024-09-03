@@ -12,7 +12,7 @@ from typing import *
 import openai
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError
-from tqdm import tqdm
+from tqdm import tqdm, trange
 from transformers import set_seed
 
 from Model.Baselines.Ablation.StackExchange.DataLoader.DataProcessor import SEProcessor
@@ -94,7 +94,7 @@ class Annotator:
             # Handle edge cases
             if type(e) == openai.LengthFinishReasonError:
                 # Retry with a higher max tokens
-                raise print(f"{coloring('LengthFinishReasonError')}: {e}")
+                raise print(f"{coloring('LengthFinishReasonError')}")
             else:
                 # Handle other exceptions
                 raise print(f"{coloring('Exception')}: {e}")
@@ -185,9 +185,9 @@ def parse_args():
                         help='Temperature')
     parser.add_argument('--max_tokens', type=int, default=1024,
                         help='Max tokens')
-    parser.add_argument('--sample_size', type=int, default=10,
+    parser.add_argument('--sample_size', type=int, default=20,
                         help='Sample size')
-    parser.add_argument('--error', type=Optional[int], default=False,
+    parser.add_argument('--error', type=Optional[int], default=12,
                         help='Error')
 
     return parser.parse_args()
@@ -204,11 +204,15 @@ def main():
 
     annotator = Annotator(configs=get_configs(args.config_path))
 
-    for idx, content in tqdm(contents.items()):
+    finish = 0
+    for idx in trange(args.sample_size):
+        if idx not in contents:
+            continue
+
         response: str = annotator.get_response(
             idx=idx,
             prompt=prompt,
-            content=content,
+            content=contents[idx],
             model_name=args.model_name,
             temperature=args.temperature,
             seed=args.seed,
@@ -219,18 +223,21 @@ def main():
 
         try:
             response = json.loads(response)
-        except json.decoder.JSONDecodeError as e:
+        except json.decoder.JSONDecodeError :
             print(f"{coloring('Error', 'yellow_bg')}: {coloring(str(idx), 'red')}")
-            raise print(f"{coloring('json.decoder.JSONDecodeError')}: {e}")
+            raise print(f"{coloring('json.decoder.JSONDecodeError')}")
 
         try:
             annotation = Annotation.model_validate(response)
-        except ValidationError as e:
+        except ValidationError:
             print(f"{coloring('Error', 'yellow_bg')}: {coloring(str(idx), 'red')}")
-            raise print(f"{coloring('ValidationError')}: {e}")
+            raise print(f"{coloring('ValidationError')}")
 
         if write(args, annotation):
+            finish = idx
             print(f"{coloring('Success', 'green')}: {coloring(str(idx), 'blue')}")
+
+    print(f"{coloring('Error', 'green')}: {coloring(str(finish + 1), 'blue')}")
 
 
 if __name__ == '__main__':
