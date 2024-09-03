@@ -4,11 +4,19 @@
 import argparse
 import configparser
 import json
+import os
+from random import randint
+from time import sleep
+from typing import *
 
 import openai
 from openai import OpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+from tqdm import tqdm
 from transformers import set_seed
+
+from Model.Baselines.Ablation.StackExchange.DataLoader.DataProcessor import SEProcessor
+from Model.Unit.cprint import *
 
 
 class Relation(BaseModel):
@@ -43,6 +51,7 @@ class Annotator:
 
     def get_response(
             self,
+            idx: int,
             prompt: str,
             content: str,
             model_name: str = "gpt-4o-2024-08-06",
@@ -78,17 +87,17 @@ class Annotator:
                 return response.content
             elif response.refusal:
                 # handle refusal
-                print(response.refusal)
+                print(f"{coloring('Refusal')}: {response.refusal}")
         except Exception as e:
+            print(f"{coloring('Error', 'yellow_bg')}: {coloring(str(idx), 'red')}")
+
             # Handle edge cases
             if type(e) == openai.LengthFinishReasonError:
                 # Retry with a higher max tokens
-                print("Too many tokens: ", e)
-                pass
+                raise print(f"{coloring('LengthFinishReasonError')}: {e}")
             else:
                 # Handle other exceptions
-                print(e)
-                pass
+                raise print(f"{coloring('Exception')}: {e}")
 
 
 def get_configs(config_path: str) -> dict:
@@ -98,6 +107,55 @@ def get_configs(config_path: str) -> dict:
         'api_key': parser.get('OpenAI API', 'api_key'),
         'base_url': parser.get('OpenAI API', 'base_url')
     }
+
+
+def get_prompt(file_path: str) -> str:
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+def get_content(left: str, right: str):
+    return json.dumps({
+        "left": left,
+        "right": right
+    })
+
+
+def get_sampled_rows(args: argparse.Namespace, error: Optional[int] = False) -> dict:
+    df = SEProcessor(
+        data_name=args.data_name,
+        limit=args.limit,
+        show=False,
+        save=None,
+        threshold=args.threshold
+    ).get_all_examples(args.data_dir)
+
+    sampled_df = df.sample(n=args.sample_size, random_state=args.seed)
+
+    rows = dict()
+    n = 0
+    for _, row in sampled_df.iterrows():
+        if error:
+            if n >= error:
+                rows[n] = get_content(left=row['left'], right=row['right'])
+        else:
+            rows[n] = get_content(left=row['left'], right=row['right'])
+        n += 1
+
+    return rows
+
+
+def mkdir(file_dir: str) -> str:
+    os.makedirs(os.path.dirname(file_dir), exist_ok=True)
+    return file_dir
+
+
+def write(args: argparse.Namespace, annotation: Annotation) -> bool:
+    file_path = mkdir(os.path.join(args.output_dir, f"{args.model_name}")) + '/rows.txt'
+
+    with open(file_path, 'a' if os.path.exists(file_path) else 'w', encoding='utf-8') as f:
+        f.write(json.dumps(annotation.model_dump()) + '\n')
+    return True
 
 
 def parse_args():
@@ -113,11 +171,13 @@ def parse_args():
                         help='Prompt path')
     parser.add_argument('--config_path', nargs='?', default='/home/cuifulai/Projects/CQA/config.ini',
                         help='Config path')
+    parser.add_argument('--output_dir', nargs='?', default='/home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Annotation',
+                        help='Output directory')
     parser.add_argument('--seed', type=int, default=2024,
                         help='Random seed')
     parser.add_argument('--limit', type=int, default=0,
                        help='Limit')
-    parser.add_argument('--threshold', type=float, default=0.5,
+    parser.add_argument('--threshold', type=float, default=-1.0,
                         help='Threshold')
     parser.add_argument('--model_name', nargs='?', default="gpt-4o-2024-08-06",
                         help='Model name')
@@ -125,51 +185,52 @@ def parse_args():
                         help='Temperature')
     parser.add_argument('--max_tokens', type=int, default=1024,
                         help='Max tokens')
+    parser.add_argument('--sample_size', type=int, default=10,
+                        help='Sample size')
+    parser.add_argument('--error', type=Optional[int], default=False,
+                        help='Error')
 
     return parser.parse_args()
 
 
-def get_prompt(file_path: str) -> str:
-    with open(file_path, 'r', encoding='utf-8') as f:
-        return f.read()
-
-
-def get_content(left: str, right: str):
-    return json.dumps({
-        "left": left,
-        "right": right
-    })
-
-
 def main():
     args = parse_args()
-    configs = get_configs(args.config_path)
 
     set_seed(args.seed)
 
-    left = "In this case, I should get more of those."
-    right = "@bfavaretto Caching, always caching. Wait a few minutes."
-
     prompt = get_prompt(file_path=args.prompt_path)
-    content = get_content(left=left, right=right)
 
-    annotator = Annotator(configs=configs)
-    response: str = annotator.get_response(
-        prompt=prompt,
-        content=content,
-        model_name=args.model_name,
-        temperature=args.temperature,
-        seed=args.seed,
-        max_tokens=args.max_tokens
-    )
+    contents = get_sampled_rows(args, args.error)
 
-    try:
-        response = json.loads(response)
-    except json.decoder.JSONDecodeError as e:
-        print(e)
+    annotator = Annotator(configs=get_configs(args.config_path))
 
-    annotation = Annotation.model_validate(response)
-    print(annotation)
+    for idx, content in tqdm(contents.items()):
+        response: str = annotator.get_response(
+            idx=idx,
+            prompt=prompt,
+            content=content,
+            model_name=args.model_name,
+            temperature=args.temperature,
+            seed=args.seed,
+            max_tokens=args.max_tokens
+        )
+
+        sleep(randint(1, 3))
+
+        try:
+            response = json.loads(response)
+        except json.decoder.JSONDecodeError as e:
+            print(f"{coloring('Error', 'yellow_bg')}: {coloring(str(idx), 'red')}")
+            raise print(f"{coloring('json.decoder.JSONDecodeError')}: {e}")
+
+        try:
+            annotation = Annotation.model_validate(response)
+        except ValidationError as e:
+            print(f"{coloring('Error', 'yellow_bg')}: {coloring(str(idx), 'red')}")
+            raise print(f"{coloring('ValidationError')}: {e}")
+
+        if write(args, annotation):
+            print(f"{coloring('Success', 'green')}: {coloring(str(idx), 'blue')}")
 
 
 if __name__ == '__main__':
