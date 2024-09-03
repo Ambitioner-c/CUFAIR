@@ -315,19 +315,30 @@ class SEProcessor(DataProcessor, ABC):
 
             return content
 
-        for link in links:
-            if scores[link[0]] > average or scores[link[1]] > average:
+        if self.threshold >= 0.0:
+            for link in links:
+                if scores[link[0]] > average or scores[link[1]] > average:
+                    # N-S
+                    if scores[link[0]] - scores[link[1]] >= self.threshold * average:
+                        n_s_pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
+
+                    # S-N
+                    if scores[link[1]] - scores[link[0]] >= self.threshold * average:
+                        s_n_pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
+
+                    # N-N
+                    if abs(scores[link[0]] - scores[link[1]]) < self.threshold * average:
+                        n_n_pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
+        else:
+            for link in links:
                 # N-S
-                if scores[link[0]] - scores[link[1]] >= self.threshold * average:
-                    n_s_pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
+                n_s_pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
 
                 # S-N
-                if scores[link[1]] - scores[link[0]] >= self.threshold * average:
-                    s_n_pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
+                s_n_pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
 
                 # N-N
-                if abs(scores[link[0]] - scores[link[1]]) < self.threshold * average:
-                    n_n_pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
+                n_n_pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
 
         return n_s_pairs, s_n_pairs, n_n_pairs
 
