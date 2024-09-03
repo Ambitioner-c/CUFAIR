@@ -12,7 +12,7 @@ from typing import *
 import openai
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError
-from tqdm import tqdm, trange
+from tqdm import trange
 from transformers import set_seed
 
 from Model.Baselines.Ablation.StackExchange.DataLoader.DataProcessor import SEProcessor
@@ -88,16 +88,19 @@ class Annotator:
             elif response.refusal:
                 # handle refusal
                 print(f"{coloring('Refusal')}: {response.refusal}")
+                exit(1)
         except Exception as e:
             print(f"{coloring('Error', 'yellow_bg')}: {coloring(str(idx), 'red')}")
 
             # Handle edge cases
             if type(e) == openai.LengthFinishReasonError:
                 # Retry with a higher max tokens
-                raise print(f"{coloring('LengthFinishReasonError')}")
+                print(f"{coloring('LengthFinishReasonError')}")
+                exit(2)
             else:
                 # Handle other exceptions
-                raise print(f"{coloring('Exception')}: {e}")
+                print(f"{coloring('Exception')}: {e}")
+                exit(3)
 
 
 def get_configs(config_path: str) -> dict:
@@ -185,9 +188,9 @@ def parse_args():
                         help='Temperature')
     parser.add_argument('--max_tokens', type=int, default=1024,
                         help='Max tokens')
-    parser.add_argument('--sample_size', type=int, default=20,
+    parser.add_argument('--sample_size', type=int, default=30,
                         help='Sample size')
-    parser.add_argument('--error', type=Optional[int], default=12,
+    parser.add_argument('--error', type=Optional[int], default=27,
                         help='Error')
 
     return parser.parse_args()
@@ -222,16 +225,27 @@ def main():
         sleep(randint(1, 3))
 
         try:
-            response = json.loads(response)
+            row: json = json.loads(response)
         except json.decoder.JSONDecodeError :
             print(f"{coloring('Error', 'yellow_bg')}: {coloring(str(idx), 'red')}")
-            raise print(f"{coloring('json.decoder.JSONDecodeError')}")
+            print(f"{coloring('json.decoder.JSONDecodeError')}")
+            exit(4)
 
         try:
-            annotation = Annotation.model_validate(response)
+            annotation = Annotation.model_validate(row)
         except ValidationError:
-            print(f"{coloring('Error', 'yellow_bg')}: {coloring(str(idx), 'red')}")
-            raise print(f"{coloring('ValidationError')}")
+            try:
+                try:
+                    row = json.loads(row['messages'][0]['content'])
+                except json.decoder.JSONDecodeError:
+                    print(f"{coloring('Error', 'yellow_bg')}: {coloring(str(idx), 'red')}")
+                    print(f"{coloring('json.decoder.JSONDecodeError')}")
+                    exit(5)
+                annotation = Annotation.model_validate(row)
+            except ValidationError:
+                print(f"{coloring('Error', 'yellow_bg')}: {coloring(str(idx), 'red')}")
+                print(f"{coloring('ValidationError')}")
+                exit(6)
 
         if write(args, annotation):
             finish = idx
