@@ -259,7 +259,7 @@ class SEProcessor(DataProcessor, ABC):
         lefts = []
         rights = []
         labels = []
-        for elem in tqdm(self.iterparse(filepath), desc=f'Parsing {cprint(filepath, 'red')} XML file'):
+        for elem in tqdm(self.iterparse(filepath), desc=f'Parsing {cprint(filepath, "red")} XML file'):
             # Answer
             for answer in elem.findall('Answer'):
                 if int(answer.attrib['COMMENT_COUNT']):
