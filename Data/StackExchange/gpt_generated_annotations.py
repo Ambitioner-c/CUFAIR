@@ -188,9 +188,9 @@ def parse_args():
                         help='Temperature')
     parser.add_argument('--max_tokens', type=int, default=1024,
                         help='Max tokens')
-    parser.add_argument('--sample_size', type=int, default=30,
+    parser.add_argument('--sample_size', type=int, default=200,
                         help='Sample size')
-    parser.add_argument('--error', type=Optional[int], default=27,
+    parser.add_argument('--error', type=Optional[int], default=109,
                         help='Error')
 
     return parser.parse_args()
@@ -226,10 +226,14 @@ def main():
 
         try:
             row: json = json.loads(response)
-        except json.decoder.JSONDecodeError :
-            print(f"{coloring('Error', 'yellow_bg')}: {coloring(str(idx), 'red')}")
-            print(f"{coloring('json.decoder.JSONDecodeError')}")
-            exit(4)
+        except json.decoder.JSONDecodeError:
+            try:
+                row: json = json.loads(response.replace(r'\"', '"'))
+            except json.decoder.JSONDecodeError:
+                print(f"{coloring('Error', 'yellow_bg')}: {coloring(str(idx), 'red')}")
+                print(f"{coloring('json.decoder.JSONDecodeError')}")
+                print(coloring(response, 'purple'))
+                exit(4)
 
         try:
             annotation = Annotation.model_validate(row)
@@ -240,11 +244,13 @@ def main():
                 except json.decoder.JSONDecodeError:
                     print(f"{coloring('Error', 'yellow_bg')}: {coloring(str(idx), 'red')}")
                     print(f"{coloring('json.decoder.JSONDecodeError')}")
+                    print(coloring(response, 'purple'))
                     exit(5)
                 annotation = Annotation.model_validate(row)
             except ValidationError:
                 print(f"{coloring('Error', 'yellow_bg')}: {coloring(str(idx), 'red')}")
                 print(f"{coloring('ValidationError')}")
+                print(coloring(response, 'purple'))
                 exit(6)
 
         if write(args, annotation):
