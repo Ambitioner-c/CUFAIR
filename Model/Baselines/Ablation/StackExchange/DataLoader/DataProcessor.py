@@ -267,25 +267,33 @@ class SEProcessor(DataProcessor, ABC):
                     if self.show or self.save:
                         self.ping_match.visualize(participants, pings, scores, answer.attrib['ID'], self.show, self.save)
 
-                    n_s_pairs, s_n_pairs, n_n_pairs = self.pair_nodes(pings, comments, scores)
+                    if self.threshold >= 0.0:
+                        n_s_pairs, s_n_pairs, n_n_pairs = self.pair_nodes(pings, comments, scores)
 
-                    # N-S
-                    for pair in n_s_pairs:
-                        lefts.append(pair[0])
-                        rights.append(pair[1])
-                        labels.append(0)
+                        # N-S
+                        for pair in n_s_pairs:
+                            lefts.append(pair[0])
+                            rights.append(pair[1])
+                            labels.append(0)
 
-                    # S-N
-                    for pair in s_n_pairs:
-                        lefts.append(pair[0])
-                        rights.append(pair[1])
-                        labels.append(1)
+                        # S-N
+                        for pair in s_n_pairs:
+                            lefts.append(pair[0])
+                            rights.append(pair[1])
+                            labels.append(1)
 
-                    # N-N
-                    for pair in n_n_pairs:
-                        lefts.append(pair[0])
-                        rights.append(pair[1])
-                        labels.append(2)
+                        # N-N
+                        for pair in n_n_pairs:
+                            lefts.append(pair[0])
+                            rights.append(pair[1])
+                            labels.append(2)
+                    else:
+                        pairs = self.pair_nodes(pings, comments, scores)
+
+                        for pair in pairs:
+                            lefts.append(pair[0])
+                            rights.append(pair[1])
+                            labels.append(-1)
 
         df = pd.DataFrame({
             'left': lefts,
@@ -308,6 +316,7 @@ class SEProcessor(DataProcessor, ABC):
         n_s_pairs: [str, str] = []
         s_n_pairs: [str, str] = []
         n_n_pairs: [str, str] = []
+        pairs: [str, str] = []
         def dig(_ping: int, content: str) -> str:
             if _ping in link_dict:
                 content = comments[link_dict[_ping]] + ' ' + content
@@ -329,18 +338,11 @@ class SEProcessor(DataProcessor, ABC):
                     # N-N
                     if abs(scores[link[0]] - scores[link[1]]) < self.threshold * average:
                         n_n_pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
+            return n_s_pairs, s_n_pairs, n_n_pairs
         else:
             for link in links:
-                # N-S
-                n_s_pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
-
-                # S-N
-                s_n_pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
-
-                # N-N
-                n_n_pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
-
-        return n_s_pairs, s_n_pairs, n_n_pairs
+                pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
+            return pairs
 
     def iterparse(self, filepath: str) -> ET.Element:
         content = ET.iterparse(filepath, events=('end',))
@@ -370,12 +372,12 @@ def main():
 
     df = SEProcessor(
         data_name,
-        limit=10,
+        limit=100,
         show=False,
         save=None,
-        threshold=0.5
+        threshold=-1.0
     ).get_all_examples(data_dir)
-    print(df.head(10).to_csv())
+    print(df.head(100).to_csv())
 
 
 if __name__ == '__main__':
