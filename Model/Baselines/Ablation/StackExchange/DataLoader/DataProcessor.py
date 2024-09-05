@@ -3,15 +3,40 @@
 # @Time: 2024/8/23 11:17
 import json
 import os.path
+import random
+import re
 from abc import ABC
+from time import sleep
+from typing import Optional
 
 import pandas as pd
+from pydantic import BaseModel
 from tqdm import tqdm
-from transformers import DataProcessor
+from transformers import DataProcessor, set_seed
 
 import xml.etree.ElementTree as ElementTree
 
-from Model.Unit.cprint import *
+from Model.Unit.cprint import coloring
+from Model.Unit.translate import BaiduTranslate
+
+
+class Relation(BaseModel):
+    type: str
+    subtype: str
+    description: str
+
+
+class Detail(BaseModel):
+    type: str
+    content: str
+    explanation: str
+
+
+class Annotation(BaseModel):
+    relation: Relation
+    left: Detail
+    right: Detail
+    category: str
 
 
 class PingMatch:
@@ -342,7 +367,10 @@ class AnnotatedSEProcessor(DataProcessor, ABC):
             data_name: str = 'meta.stackexchange.com',
             model_name: str = 'gpt-4o-2024-08-06',
             limit: int = 0,
-            show: bool = False
+            show: bool = False,
+            save: Optional[str] = None,
+            sample: [int, int] = None,
+            translator: BaiduTranslate = None
     ):
         super(AnnotatedSEProcessor).__init__()
 
@@ -350,6 +378,9 @@ class AnnotatedSEProcessor(DataProcessor, ABC):
         self.model_name = model_name
         self.limit = limit
         self.show = show
+        self.save = save
+        self.sample = sample
+        self.translator = translator
 
     def get_all_examples(self, data_dir: str) -> pd.DataFrame:
         return self.create_examples(os.path.join(data_dir, self.data_name, 'Annotation', self.model_name, 'rows.txt'))
@@ -367,12 +398,16 @@ class AnnotatedSEProcessor(DataProcessor, ABC):
         pass
 
     def create_examples(self, filepath: str) -> pd.DataFrame:
+        sampled_idxs = random.sample(range(self.sample[1]), self.sample[0])
+
         lefts: [str] = []
         rights: [str] = []
         labels: [int] = []
-        for annotation in tqdm(self.iterparse(filepath, self.limit), desc=f'Parsing {coloring(filepath, "red")} TXT file'):
-            if self.show:
-                pass
+        for idx, annotation in tqdm(self.iterparse(filepath, self.limit), desc=f'Parsing {coloring(filepath, "red")} TXT file'):
+
+            if self.show or self.save:
+                if idx in sampled_idxs:
+                    self.visualize(annotation, self.show, self.save, self.translator)
 
             lefts.append(annotation['left']['content'])
             rights.append(annotation['right']['content'])
@@ -399,25 +434,111 @@ class AnnotatedSEProcessor(DataProcessor, ABC):
 
 
     @ staticmethod
-    def iterparse(filepath: str, limit: int) -> json:
+    def iterparse(filepath: str, limit: int) -> (int, json):
         with open(filepath, 'r', encoding='utf-8') as f:
 
-            n = 0
+            idx = 0
             for line in f:
                 if limit:
-                    yield json.loads(line)
+                    yield idx, json.loads(line)
+                    idx += 1
 
-                    n += 1
-                    if n == limit:
+                    if idx == limit:
                         break
                 else:
-                    yield json.loads(line)
+                    yield idx, json.loads(line)
+                    idx += 1
+
+    @ staticmethod
+    def visualize(annotation: json, show: bool, save: Optional[str], translator: BaiduTranslate):
+        annotation = Annotation(**annotation)
+
+        relation_type = translator.translate(annotation.relation.type)
+        relation_subtype = translator.translate(annotation.relation.subtype)
+        relation_description = translator.translate(annotation.relation.description)
+
+        left_content = translator.translate(annotation.left.content)
+        left_explanation = translator.translate(annotation.left.explanation)
+
+        right_content = translator.translate(annotation.right.content)
+        right_explanation = translator.translate(annotation.right.explanation)
+
+        sleep(random.randint(1, 3))
+
+        if show:
+            string = (f"{'{'}\n"
+                      f"{' ' * 4 + '"'}relation{'": {'}\n"
+                      f"{' ' * 8 + '"'}{coloring('type', 'red')}{'": "'}{annotation.relation.type}{'",'}\n"
+                      f"{' ' * 8 + '"'}类型{'": "'}{relation_type}{'",'}\n"
+                      f"{' ' * 8 + '"'}subtype{'": "'}{annotation.relation.subtype}{'",'}\n"
+                      f"{' ' * 8 + '"'}子类型{'": "'}{relation_subtype}{'",'}\n"
+                      f"{' ' * 8 + '"'}description{'": "'}{annotation.relation.description}{'",'}\n"
+                      f"{' ' * 8 + '"'}描述{'": "'}{relation_description}{'"'}\n"
+                      f"{' ' * 4 + '},'}\n"
+                      f"{' ' * 4 + '"'}left{'": {'}\n"
+                      f"{' ' * 8 + '"'}{coloring('type', 'red')}{'": "'}{coloring(annotation.left.type, 'red_bg') if annotation.left.type == 'Nucleus' else coloring(annotation.left.type, 'green_bg')}{'",'}\n"
+                      f"{' ' * 8 + '"'}类型{'": "'}{'核' if annotation.left.type == 'Nucleus' else '卫星' if annotation.left.type == 'Satellite' else annotation.left.type}{'",'}\n"
+                      f"{' ' * 8 + '"'}content{'": "'}{annotation.left.content}{'",'}\n"
+                      f"{' ' * 8 + '"'}内容{'": "'}{left_content}{'",'}\n"
+                      f"{' ' * 8 + '"'}explanation{'": "'}{annotation.left.explanation}{'",'}\n"
+                      f"{' ' * 8 + '"'}解释{'": "'}{left_explanation}{'"'}\n"
+                      f"{' ' * 4 + '},'}\n"
+                      f"{' ' * 4 + '"'}right{'": {'}\n"
+                      f"{' ' * 8 + '"'}{coloring('type', 'red')}{'": "'}{coloring(annotation.right.type, 'red_bg') if annotation.right.type == 'Nucleus' else coloring(annotation.right.type, 'green_bg')}{'",'}\n"
+                      f"{' ' * 8 + '"'}类型{'": "'}{'核' if annotation.right.type == 'Nucleus' else '卫星' if annotation.right.type == 'Satellite' else annotation.right.type}{'",'}\n"
+                      f"{' ' * 8 + '"'}content{'": "'}{annotation.right.content}{'",'}\n"
+                      f"{' ' * 8 + '"'}内容{'": "'}{right_content}{'",'}\n"
+                      f"{' ' * 8 + '"'}explanation{'": "'}{annotation.right.explanation}{'",'}\n"
+                      f"{' ' * 8 + '"'}解释{'": "'}{right_explanation}{'"'}\n"
+                      f"{' ' * 4 + '},'}\n"
+                      f"{' ' * 4 + '"'}category{'": "'}{coloring(annotation.category, 'yellow_bg') if 'N-S' in annotation.category else coloring(annotation.category, 'blue_bg') if 'S-N' in annotation.category else coloring(annotation.category, 'purple_bg')}{'"'}\n"
+                      f"{'}'}")
+            print(string)
+
+        if save:
+            obj = {
+                '关系(relation)': {
+                    'type': annotation.relation.type,
+                    '类型': relation_type,
+                    'subtype': annotation.relation.subtype,
+                    '子类型': relation_subtype,
+                    'description': annotation.relation.description,
+                    '描述': relation_description
+                },
+                '左节点(left)': {
+                    'type': annotation.left.type,
+                    '类型': '核' if annotation.left.type == 'Nucleus' else '卫星' if annotation.left.type == 'Satellite' else annotation.left.type,
+                    'content': annotation.left.content,
+                    '内容': left_content,
+                    'explanation': annotation.left.explanation,
+                    '解释': left_explanation
+                },
+                '右节点(right)': {
+                    'type': annotation.right.type,
+                    '类型': '核' if annotation.right.type == 'Nucleus' else '卫星' if annotation.right.type == 'Satellite' else annotation.right.type,
+                    'content': annotation.right.content,
+                    '内容': right_content,
+                    'explanation': annotation.right.explanation,
+                    '解释': right_explanation
+                },
+                '类别(category)': annotation.category,
+            }
+            string = json.dumps(obj, indent=4, ensure_ascii=False)
+            with open(save, 'a' if os.path.exists(save) else 'w', encoding='utf-8') as f:
+                print(string, file=f)
 
 
 def main():
+    set_seed(2024)
+
     data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
     data_name = 'meta.stackoverflow.com'
     model_name = 'gpt-4o-2024-08-06'
+    save = os.path.join(data_dir, data_name, 'Annotation', model_name, 'samples.txt')
+
+    config_path = '/home/cuifulai/Projects/CQA/config.ini'
+
+    translator = BaiduTranslate(config_path)
 
     # save_path = f"../Result/Interaction/{data_name}.txt"
     #
@@ -433,10 +554,13 @@ def main():
     df = AnnotatedSEProcessor(
         data_name,
         model_name,
-        limit=10,
-        show=True
+        limit=0,
+        show=True,
+        save=save,
+        sample=[100, 1000],
+        translator=translator
     ).get_all_examples(data_dir)
-    print(df.head(10).to_csv())
+    # print(df.head(10).to_csv())
 
 
 if __name__ == '__main__':
