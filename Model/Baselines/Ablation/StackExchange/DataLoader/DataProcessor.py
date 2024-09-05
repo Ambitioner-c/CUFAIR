@@ -1,6 +1,7 @@
 # coding=utf-8
 # @Author: Fulai Cui (cuifulai@mail.hfut.edu.cn)
 # @Time: 2024/8/23 11:17
+import json
 import os.path
 import re
 from abc import ABC
@@ -9,13 +10,13 @@ import pandas as pd
 from tqdm import tqdm
 from transformers import DataProcessor
 
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ElementTree
 
 from Model.Unit.cprint import *
 
 
 class PingMatch:
-    def main(self, answer: ET.Element) -> ([str], [int], [str]):
+    def main(self, answer: ElementTree.Element) -> ([str], [int], [str]):
         a_name = answer.attrib['OWNER_DISPLAY_NAME']
 
         participants: [str] = list()
@@ -227,9 +228,9 @@ class SEProcessor(DataProcessor, ABC):
         pass
 
     def create_examples(self, filepath: str) -> pd.DataFrame:
-        lefts = []
-        rights = []
-        labels = []
+        lefts: [str] = []
+        rights: [str] = []
+        labels: [int] = []
         for elem in tqdm(self.iterparse(filepath, self.limit), desc=f'Parsing {coloring(filepath, "red")} XML file'):
             # Answer
             for answer in elem.findall('Answer'):
@@ -316,8 +317,8 @@ class SEProcessor(DataProcessor, ABC):
             return pairs
 
     @staticmethod
-    def iterparse(filepath: str, limit: int) -> ET.Element:
-        content = ET.iterparse(filepath, events=('end',))
+    def iterparse(filepath: str, limit: int) -> ElementTree.Element:
+        content = ElementTree.iterparse(filepath, events=('end',))
         _, root = next(content)
 
         n = 0
@@ -336,20 +337,107 @@ class SEProcessor(DataProcessor, ABC):
                     root.clear()
 
 
+class AnnotatedSEProcessor(DataProcessor, ABC):
+    def __init__(
+            self,
+            data_name: str = 'meta.stackexchange.com',
+            model_name: str = 'gpt-4o-2024-08-06',
+            limit: int = 0,
+            show: bool = False
+    ):
+        super(AnnotatedSEProcessor).__init__()
+
+        self.data_name = data_name
+        self.model_name = model_name
+        self.limit = limit
+        self.show = show
+
+    def get_all_examples(self, data_dir: str) -> pd.DataFrame:
+        return self.create_examples(os.path.join(data_dir, self.data_name, 'Annotation', self.model_name, 'rows.txt'))
+
+    def get_train_examples(self, data_dir: str) -> pd.DataFrame:
+        pass
+
+    def get_dev_examples(self, data_dir: str) -> pd.DataFrame:
+        pass
+
+    def get_test_examples(self, data_dir: str) -> pd.DataFrame:
+        pass
+
+    def get_labels(self):
+        pass
+
+    def create_examples(self, filepath: str) -> pd.DataFrame:
+        lefts: [str] = []
+        rights: [str] = []
+        labels: [int] = []
+        for annotation in tqdm(self.iterparse(filepath, self.limit), desc=f'Parsing {coloring(filepath, "red")} TXT file'):
+            if self.show:
+                pass
+
+            lefts.append(annotation['left']['content'])
+            rights.append(annotation['right']['content'])
+
+            def get_label(_category: str) -> int:
+                if 'N-S' in _category:
+                    return 0
+                elif 'S-N' in _category:
+                    return 1
+                elif 'N-N' in _category:
+                    return 2
+                else:
+                    raise ValueError(f"Unknown category: {_category}")
+
+            labels.append(get_label(annotation['category']))
+
+        df = pd.DataFrame({
+            'left': lefts,
+            'right': rights,
+            'label': labels
+        })
+
+        return df
+
+
+    @ staticmethod
+    def iterparse(filepath: str, limit: int) -> json:
+        with open(filepath, 'r', encoding='utf-8') as f:
+
+            n = 0
+            for line in f:
+                if limit:
+                    yield json.loads(line)
+
+                    n += 1
+                    if n == limit:
+                        break
+                else:
+                    yield json.loads(line)
+
+
 def main():
     data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
     data_name = 'meta.stackoverflow.com'
+    model_name = 'gpt-4o-2024-08-06'
 
-    save_path = f"../Result/Interaction/{data_name}.txt"
+    # save_path = f"../Result/Interaction/{data_name}.txt"
+    #
+    # df = SEProcessor(
+    #     data_name,
+    #     limit=10,
+    #     show=True,
+    #     save=None,
+    #     threshold=-1.0
+    # ).get_all_examples(data_dir)
+    # print(df.head(10).to_csv())
 
-    df = SEProcessor(
+    df = AnnotatedSEProcessor(
         data_name,
+        model_name,
         limit=10,
-        show=True,
-        save=None,
-        threshold=-1.0
+        show=True
     ).get_all_examples(data_dir)
-    print(df.head(100).to_csv())
+    print(df.head(10).to_csv())
 
 
 if __name__ == '__main__':
