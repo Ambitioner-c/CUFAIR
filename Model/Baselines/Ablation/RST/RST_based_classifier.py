@@ -38,6 +38,7 @@ from Model.Unit.metrics import (
 from Model.Unit.modeling_bert import (
     BertSelfAttention,
 )
+from Model.Unit.cprint import coloring, decoloring
 
 
 from warnings import simplefilter
@@ -128,10 +129,16 @@ class RSTModel(nn.Module):
 def get_metrics(input: np.array, target: np.array):
     acc = accuracy_score(input, target)
     pre = precision_score(input, target, average='weighted')
+    micro_pre = precision_score(input, target, average='micro')
+    macro_pre = precision_score(input, target, average='macro')
     rec = recall_score(input, target, average='weighted')
+    micro_rec = recall_score(input, target, average='micro')
+    macro_rec = recall_score(input, target, average='macro')
     f1 = f1_score(input, target, average='weighted')
+    micro_f1 = f1_score(input, target, average='micro')
+    macro_f1 = f1_score(input, target, average='macro')
 
-    return acc, pre, rec, f1
+    return acc, (pre, micro_pre, macro_pre), (rec, micro_rec, macro_rec), (f1, micro_f1, macro_f1)
 
 
 def mkdir(file_path: str) -> str:
@@ -153,6 +160,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
     args_path = f'./Result/Temp/{task_name}-{timestamp}/args.json'
     temp_train_csv = f'./Result/Temp/{task_name}-{timestamp}/train.csv'
     temp_dev_csv = f'./Result/Temp/{task_name}-{timestamp}/dev.csv'
+    best_dev_csv = f'./Result/Temp/{task_name}-{timestamp}/best_dev.csv'
     finetuned_model_path = f'./FinetunedModel/{task_name}-{timestamp}/best_model.pth'
     finetuned_bert_model_path = f'./FinetunedModel/{task_name}-{timestamp}/bert-base-uncased'
 
@@ -163,7 +171,8 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
 
     best_model = None
     best_loss = float('inf')
-    best_acc, best_pre, best_rec, best_f1 = -1, -1, -1, -1
+    best_acc, (best_pre, best_micro_pre, best_macro_pre), (best_rec, best_micro_rec, best_macro_rec), (best_f1, best_micro_f1, best_macro_f1) \
+        = -1, (-1, -1, -1), (-1, -1, -1), (-1, -1, -1)
 
     n = 0
     for epoch in range(epochs):
@@ -181,81 +190,135 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
 
             temp_train_result = (f'{task_name}\t'
                                  f'epoch/epochs:{epoch + 1}/{epochs}\t'
-                                 f'train_loss:{np.mean(train_loss.item())}')
+                                 f'{coloring("train_loss", "red_bg")}:{np.mean(train_loss.item())}')
             with open(mkdir(temp_train_csv), 'a' if os.path.exists(temp_train_csv) else 'w') as f:
-                f.write(temp_train_result + '\n')
+                f.write(decoloring(temp_train_result) + '\n')
             # print(temp_train_result)
 
             if n % step == 0:
                 dev_losses = []
-                dev_accs, dev_pres, dev_recs, dev_f1s = [], [], [], []
+                dev_accs, (dev_pres, dev_micro_pres, dev_macro_pres), (dev_recs, dev_micro_recs, dev_macro_recs), (dev_f1s, dev_micro_f1s, dev_macro_f1s) \
+                    = [], ([], [], []), ([], [], []), ([], [], [])
                 for dev_sample in dev_dataloader:
                     dev_labels = dev_sample['label']
                     with torch.no_grad():
                         dev_output = model(dev_sample)
 
                         dev_loss = loss_function(input=dev_output, target=dev_labels.view(-1).to(device))
-                        dev_acc, dev_pre, dev_rec, dev_f1 = get_metrics(dev_output.cpu().numpy(), dev_labels.cpu().numpy())
+                        dev_acc, (dev_pre, dev_micro_pre, dev_macro_pre), (dev_rec, dev_micro_rec, dev_macro_rec), (dev_f1, dev_micro_f1, dev_macro_f1) \
+                            = get_metrics(dev_output.cpu().numpy(), dev_labels.cpu().numpy())
 
                         dev_losses.append(dev_loss.item())
                         dev_accs.append(dev_acc)
                         dev_pres.append(dev_pre)
+                        dev_micro_pres.append(dev_micro_pre)
+                        dev_macro_pres.append(dev_macro_pre)
                         dev_recs.append(dev_rec)
+                        dev_micro_recs.append(dev_micro_rec)
+                        dev_macro_recs.append(dev_macro_rec)
                         dev_f1s.append(dev_f1)
-                temp_dev_result = (f'{task_name}\t'
-                                   f'epoch/epochs:{epoch + 1}/{epochs}\t'
-                                   f'dev_loss:{round(np.mean(dev_losses), 4)}\t'
-                                   f'dev_acc:{round(np.mean(dev_accs), 4)}\t'
-                                   f'dev_pre:{round(np.mean(dev_pres), 4)}\t'
-                                   f'dev_rec:{round(np.mean(dev_recs), 4)}\t'
-                                   f'dev_f1:{round(np.mean(dev_f1s), 4)}\t')
+                        dev_micro_f1s.append(dev_micro_f1)
+                        dev_macro_f1s.append(dev_macro_f1)
+                temp_dev_result = (
+                    f'{task_name}\t'
+                    f'epoch/epochs:{epoch + 1}/{epochs}\t'
+                    f'{coloring("dev_loss", "red_bg")}:{round(np.mean(dev_losses), 4)}\t'
+                    f'{coloring("dev_acc", "green_bg")}:{round(np.mean(dev_accs), 4)}\t'
+                    f'{coloring("dev_pre", "yellow_bg")}:{round(np.mean(dev_pres), 4)}\t'
+                    f'dev_micro_pre:{round(np.mean(dev_micro_pres), 4)}\t'
+                    f'dev_macro_pre:{round(np.mean(dev_macro_pres), 4)}\t'
+                    f'{coloring("dev_rec", "blue_bg")}:{round(np.mean(dev_recs), 4)}\t'
+                    f'dev_micro_rec:{round(np.mean(dev_micro_recs), 4)}\t'
+                    f'dev_macro_rec:{round(np.mean(dev_macro_recs), 4)}\t'
+                    f'{coloring("dev_f1", "purple_bg")}:{round(np.mean(dev_f1s), 4)}\t'
+                    f'dev_micro_f1:{round(np.mean(dev_micro_f1s), 4)}\t'
+                    f'dev_macro_f1:{round(np.mean(dev_macro_f1s), 4)}\t'
+                )
                 with open(mkdir(temp_dev_csv), 'a' if os.path.exists(temp_dev_csv) else 'w') as f:
-                    f.write(temp_dev_result + '\n')
+                    f.write(decoloring(temp_dev_result) + '\n')
                 print(temp_dev_result)
 
                 if np.mean(dev_losses) < best_loss:
                     best_loss = np.mean(dev_losses)
                     best_acc = np.mean(dev_accs)
                     best_pre = np.mean(dev_pres)
+                    best_micro_pre = np.mean(dev_micro_pres)
+                    best_macro_pre = np.mean(dev_macro_pres)
                     best_rec = np.mean(dev_recs)
+                    best_micro_rec = np.mean(dev_micro_recs)
+                    best_macro_rec = np.mean(dev_macro_recs)
                     best_f1 = np.mean(dev_f1s)
+                    best_micro_f1 = np.mean(dev_micro_f1s)
+                    best_macro_f1 = np.mean(dev_macro_f1s)
                     best_model = copy.deepcopy(model)
             n += 1
 
     torch.save(best_model.state_dict(), mkdir(finetuned_model_path))
     best_model.bert.save_pretrained(mkdir(finetuned_bert_model_path))
-    print(f'Best loss:{best_loss}\t'
-          f'Best acc:{best_acc}\t'
-          f'Best pre:{best_pre}\t'
-          f'Best rec:{best_rec}\t'
-          f'Best f1:{best_f1}\t')
-    print(f'Finetuned model path: {finetuned_model_path}')
-    print(f'Finetuned bert model path: {finetuned_bert_model_path}')
+    best_dev_result = (
+        f'{coloring("best_loss", "red_bg")}:{best_loss}\t'
+        f'{coloring("best_acc", "green_bg")}:{best_acc}\t'
+        f'{coloring("best_pre", "yellow_bg")}:{best_pre}\t'
+        f'best_micro_pre:{best_micro_pre}\t'
+        f'best_macro_pre:{best_macro_pre}\t'
+        f'{coloring("best_rec", "blue_bg")}:{best_rec}\t'
+        f'best_micro_rec:{best_micro_rec}\t'
+        f'best_macro_rec:{best_macro_rec}\t'
+        f'{coloring("best_f1", "purple_bg")}:{best_f1}\t'
+        f'best_micro_f1:{best_micro_f1}\t'
+        f'best_macro_f1:{best_macro_f1}\t'
+    )
+    with open(mkdir(best_dev_csv), 'a' if os.path.exists(best_dev_csv) else 'w') as f:
+        f.write(decoloring(best_dev_result) + '\n')
+    print(best_dev_result)
 
-    return best_model
+    print(f'{coloring("Finetuned model path", "red_bg")}: {finetuned_model_path}')
+    print(f'{coloring("Finetuned bert model path", "green_bg")}: {finetuned_bert_model_path}')
+
+    return best_model, timestamp
 
 
-def evaluate(task_name, model, test_dataloader):
+def evaluate(args, task_name, model, test_dataloader, timestamp):
     model.eval()
 
-    test_accs, test_pres, test_recs, test_f1s = [], [], [], []
-    for test_sample in tqdm(test_dataloader):
+    test_accs, (test_pres, test_micro_pres, test_macro_pres), (test_recs, test_micro_recs, test_macro_recs), (test_f1s, test_micro_f1s, test_macro_f1s) \
+        = [], ([], [], []), ([], [], []), ([], [], [])
+    for test_sample in test_dataloader:
         test_labels = test_sample['label']
         with torch.no_grad():
             test_output = model(test_sample)
 
-            test_acc, test_pre, test_rec, test_f1 = get_metrics(test_output.cpu().numpy(), test_labels.cpu().numpy())
+            test_acc, (test_pre, test_micro_pre, test_macro_pre), (test_rec, test_micro_rec, test_macro_rec), (test_f1, test_micro_f1, test_macro_f1) \
+                = get_metrics(test_output.cpu().numpy(), test_labels.cpu().numpy())
 
             test_accs.append(test_acc)
             test_pres.append(test_pre)
+            test_micro_pres.append(test_micro_pre)
+            test_macro_pres.append(test_macro_pre)
             test_recs.append(test_rec)
+            test_micro_recs.append(test_micro_rec)
+            test_macro_recs.append(test_macro_rec)
             test_f1s.append(test_f1)
-    temp_test_result = (f'{task_name}\t'
-                        f'test_acc:{round(np.mean(test_accs), 4)}\t'
-                        f'test_pre:{round(np.mean(test_pres), 4)}\t'
-                        f'test_rec:{round(np.mean(test_recs), 4)}\t'
-                        f'test_f1:{round(np.mean(test_f1s), 4)}\t')
-    print(temp_test_result)
+            test_micro_f1s.append(test_micro_f1)
+            test_macro_f1s.append(test_macro_f1)
+    best_test_result = (
+        f'{task_name}\t'
+        f'{coloring("test_acc", "green_bg")}:{round(np.mean(test_accs), 4)}\t'
+        f'{coloring("test_pre", "yellow_bg")}:{round(np.mean(test_pres), 4)}\t'
+        f'test_micro_pre:{round(np.mean(test_micro_pres), 4)}\t'
+        f'test_macro_pre:{round(np.mean(test_macro_pres), 4)}\t'
+        f'{coloring("test_rec", "blue_bg")}:{round(np.mean(test_recs), 4)}\t'
+        f'test_micro_rec:{round(np.mean(test_micro_recs), 4)}\t'
+        f'test_macro_rec:{round(np.mean(test_macro_recs), 4)}\t'
+        f'{coloring("test_f1", "purple_bg")}:{round(np.mean(test_f1s), 4)}\t'
+        f'test_micro_f1:{round(np.mean(test_micro_f1s), 4)}\t'
+        f'test_macro_f1:{round(np.mean(test_macro_f1s), 4)}\t'
+    )
+    if args.is_train:
+        best_test_csv = f'./Result/Temp/{task_name}-{timestamp}/best_test.csv'
+        with open(mkdir(best_test_csv), 'a' if os.path.exists(best_test_csv) else 'w') as f:
+            f.write(decoloring(best_test_result) + '\n')
+    print(best_test_result)
 
 
 def parse_args():
@@ -293,7 +356,7 @@ def parse_args():
                         help='Number of labels')
     parser.add_argument('--step', type=int, default=1,
                         help='Step')
-    parser.add_argument('--is_from_finetuned', type=bool, default=True,
+    parser.add_argument('--is_from_finetuned', type=bool, default=False,
                         help='Is from finetuned')
     parser.add_argument('--is_train', type=bool, default=True,
                         help='Is train')
@@ -330,12 +393,13 @@ def main():
         dropout_prob=args.dropout_prob
     ).to(device)
 
+    timestamp = None
     if args.is_from_finetuned:
         model.load_state_dict(torch.load(args.finetuned_model_path))
     if args.is_train:
-        model = train(args, args.task_name, model, train_dataloader, dev_dataloader, args.epochs, args.lr, device, args.step)
+        model, timestamp = train(args, args.task_name, model, train_dataloader, dev_dataloader, args.epochs, args.lr, device, args.step)
 
-    evaluate(args.task_name, model, test_dataloader)
+    evaluate(args, args.task_name, model, test_dataloader, timestamp)
 
 
 if __name__ == '__main__':
