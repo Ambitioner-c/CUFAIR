@@ -70,6 +70,7 @@ def main():
     translate = BaiduTranslate(config_path)
     response = translate.translate(query, from_lang='en', to_lang='zh')
     print(json.dumps(response, indent=4, ensure_ascii=False))
+    print(response['trans_result'][0]['dst'])
 
 
 if __name__ == '__main__':
