@@ -42,11 +42,13 @@ def coloring(content: str, color: str=None) -> str:
 
 
 def decoloring(content: str) -> str:
-    return re.findall(r'\033\[\d+m(.+?)\033\[0m', content)[0]
+    content = re.sub(r'\033\[\d+m', '', content)
+    content = re.sub(r'\033\[0m', '', content)
+    return content
 
 
 def main():
-    colorful = coloring('Hello, World!', 'red')
+    colorful = f"{coloring('Hello', 'red')}, {coloring('World')}!"
     print(colorful)
 
     monochrome = decoloring(colorful)
