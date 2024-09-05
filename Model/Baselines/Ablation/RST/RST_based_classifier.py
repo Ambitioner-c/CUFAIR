@@ -158,9 +158,9 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     args_path = f'./Result/Temp/{task_name}-{timestamp}/args.json'
-    temp_train_csv = f'./Result/Temp/{task_name}-{timestamp}/train.csv'
-    temp_dev_csv = f'./Result/Temp/{task_name}-{timestamp}/dev.csv'
-    best_dev_csv = f'./Result/Temp/{task_name}-{timestamp}/best_dev.csv'
+    temp_train_tsv = f'./Result/Temp/{task_name}-{timestamp}/train.tsv'
+    temp_dev_tsv = f'./Result/Temp/{task_name}-{timestamp}/dev.tsv'
+    best_dev_tsv = f'./Result/Temp/{task_name}-{timestamp}/best_dev.tsv'
     finetuned_model_path = f'./FinetunedModel/{task_name}-{timestamp}/best_model.pth'
     finetuned_bert_model_path = f'./FinetunedModel/{task_name}-{timestamp}/bert-base-uncased'
 
@@ -191,7 +191,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
             temp_train_result = (f'{task_name}\t'
                                  f'epoch/epochs:{epoch + 1}/{epochs}\t'
                                  f'{coloring("train_loss", "red_bg")}:{np.mean(train_loss.item())}')
-            with open(mkdir(temp_train_csv), 'a' if os.path.exists(temp_train_csv) else 'w') as f:
+            with open(mkdir(temp_train_tsv), 'a' if os.path.exists(temp_train_tsv) else 'w') as f:
                 f.write(decoloring(temp_train_result) + '\n')
             # print(temp_train_result)
 
@@ -234,7 +234,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
                     f'dev_micro_f1:{round(np.mean(dev_micro_f1s), 4)}\t'
                     f'dev_macro_f1:{round(np.mean(dev_macro_f1s), 4)}\t'
                 )
-                with open(mkdir(temp_dev_csv), 'a' if os.path.exists(temp_dev_csv) else 'w') as f:
+                with open(mkdir(temp_dev_tsv), 'a' if os.path.exists(temp_dev_tsv) else 'w') as f:
                     f.write(decoloring(temp_dev_result) + '\n')
                 print(temp_dev_result)
 
@@ -268,7 +268,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
         f'best_micro_f1:{best_micro_f1}\t'
         f'best_macro_f1:{best_macro_f1}\t'
     )
-    with open(mkdir(best_dev_csv), 'a' if os.path.exists(best_dev_csv) else 'w') as f:
+    with open(mkdir(best_dev_tsv), 'a' if os.path.exists(best_dev_tsv) else 'w') as f:
         f.write(decoloring(best_dev_result) + '\n')
     print(best_dev_result)
 
@@ -315,8 +315,8 @@ def evaluate(args, task_name, model, test_dataloader, timestamp):
         f'test_macro_f1:{round(np.mean(test_macro_f1s), 4)}\t'
     )
     if args.is_train:
-        best_test_csv = f'./Result/Temp/{task_name}-{timestamp}/best_test.csv'
-        with open(mkdir(best_test_csv), 'a' if os.path.exists(best_test_csv) else 'w') as f:
+        best_test_tsv = f'./Result/Temp/{task_name}-{timestamp}/best_test.tsv'
+        with open(mkdir(best_test_tsv), 'a' if os.path.exists(best_test_tsv) else 'w') as f:
             f.write(decoloring(best_test_result) + '\n')
     print(best_test_result)
 
