@@ -232,7 +232,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
                     f'dev_macro_rec:{round(np.mean(dev_macro_recs), 4)}\t'
                     f'{coloring("dev_f1", "purple_bg")}:{round(np.mean(dev_f1s), 4)}\t'
                     f'dev_micro_f1:{round(np.mean(dev_micro_f1s), 4)}\t'
-                    f'dev_macro_f1:{round(np.mean(dev_macro_f1s), 4)}\t'
+                    f'dev_macro_f1:{round(np.mean(dev_macro_f1s), 4)}'
                 )
                 with open(mkdir(temp_dev_tsv), 'a' if os.path.exists(temp_dev_tsv) else 'w') as f:
                     f.write(decoloring(temp_dev_result) + '\n')
@@ -266,7 +266,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
         f'best_macro_rec:{best_macro_rec}\t'
         f'{coloring("best_f1", "purple_bg")}:{best_f1}\t'
         f'best_micro_f1:{best_micro_f1}\t'
-        f'best_macro_f1:{best_macro_f1}\t'
+        f'best_macro_f1:{best_macro_f1}'
     )
     with open(mkdir(best_dev_tsv), 'a' if os.path.exists(best_dev_tsv) else 'w') as f:
         f.write(decoloring(best_dev_result) + '\n')
@@ -312,7 +312,7 @@ def evaluate(args, task_name, model, test_dataloader, timestamp):
         f'test_macro_rec:{round(np.mean(test_macro_recs), 4)}\t'
         f'{coloring("test_f1", "purple_bg")}:{round(np.mean(test_f1s), 4)}\t'
         f'test_micro_f1:{round(np.mean(test_micro_f1s), 4)}\t'
-        f'test_macro_f1:{round(np.mean(test_macro_f1s), 4)}\t'
+        f'test_macro_f1:{round(np.mean(test_macro_f1s), 4)}'
     )
     if args.is_train:
         best_test_tsv = f'./Result/Temp/{task_name}-{timestamp}/best_test.tsv'
