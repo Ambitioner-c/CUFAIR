@@ -19,11 +19,11 @@ class BaiduTranslate:
             query: str,
             from_lang: str = 'en',
             to_lang: str = 'zh'
-    ) -> json:
+    ) -> str:
         query = query.replace('\n', ' ')
         headers, payload = self.build_request(query, from_lang, to_lang)
         response: json = requests.post(self.url, params=payload, headers=headers).json()
-        return response
+        return response['trans_result'][0]['dst']
 
 
     @staticmethod
@@ -69,8 +69,7 @@ def main():
 
     translate = BaiduTranslate(config_path)
     response = translate.translate(query, from_lang='en', to_lang='zh')
-    print(json.dumps(response, indent=4, ensure_ascii=False))
-    print(response['trans_result'][0]['dst'])
+    print(response)
 
 
 if __name__ == '__main__':
