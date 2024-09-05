@@ -195,11 +195,11 @@ class PingMatch:
 class SEProcessor(DataProcessor, ABC):
     def __init__(
             self,
-            data_name: str='meta.stackexchange.com',
-            limit: int=0,
-            show: bool=False,
-            save: str=None,
-            threshold: float=0.5
+            data_name: str = 'meta.stackexchange.com',
+            limit: int = 0,
+            show: bool = False,
+            save: str = None,
+            threshold: float = 0.5
     ):
         super(SEProcessor, self).__init__()
 
@@ -230,7 +230,7 @@ class SEProcessor(DataProcessor, ABC):
         lefts = []
         rights = []
         labels = []
-        for elem in tqdm(self.iterparse(filepath), desc=f'Parsing {coloring(filepath, "red")} XML file'):
+        for elem in tqdm(self.iterparse(filepath, self.limit), desc=f'Parsing {coloring(filepath, "red")} XML file'):
             # Answer
             for answer in elem.findall('Answer'):
                 if int(answer.attrib['COMMENT_COUNT']):
@@ -315,19 +315,20 @@ class SEProcessor(DataProcessor, ABC):
                 pairs.append([dig(link[0], comments[link[0]]), comments[link[1]]])
             return pairs
 
-    def iterparse(self, filepath: str) -> ET.Element:
+    @staticmethod
+    def iterparse(filepath: str, limit: int) -> ET.Element:
         content = ET.iterparse(filepath, events=('end',))
         _, root = next(content)
 
         n = 0
         for event, elem in content:
-            if self.limit:
+            if limit:
                 if elem.tag == 'Thread':
                     yield elem
                     root.clear()
 
                     n += 1
-                    if n == self.limit:
+                    if n == limit:
                         break
             else:
                 if elem.tag == 'Thread':
@@ -343,8 +344,8 @@ def main():
 
     df = SEProcessor(
         data_name,
-        limit=100,
-        show=False,
+        limit=10,
+        show=True,
         save=None,
         threshold=-1.0
     ).get_all_examples(data_dir)
