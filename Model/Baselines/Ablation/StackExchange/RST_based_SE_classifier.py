@@ -25,7 +25,6 @@ transformers.logging.set_verbosity_error()
 from transformers import (
     set_seed,
     AutoTokenizer,
-    BertForSequenceClassification,
     BertModel
 )
 
@@ -47,32 +46,6 @@ from Model.Unit.cprint import coloring, decoloring
 from warnings import simplefilter
 simplefilter(action='ignore', category=FutureWarning)
 simplefilter(action='ignore', category=UserWarning)
-
-
-class BERTModel(nn.Module):
-    def __init__(
-            self,
-            freeze: bool = False,
-            pretrained_model_name_or_path: str = 'bert-base-uncased',
-            device: torch.device = torch.device('cuda:0'),
-            num_labels: int = 3
-    ):
-        super(BERTModel).__init__()
-        self.device = device
-
-        self.bert = BertForSequenceClassification.from_pretrained(pretrained_model_name_or_path, num_labels=num_labels)
-        for p in self.bert.parameters():
-            p.data = p.data.contiguous()
-
-        if freeze:
-            for p in self.bert.parameters():
-                p.requires_grad = False
-
-    def forward(self, sample: pd.DataFrame):
-        pair = sample['pair'].to(self.device)
-        outputs = self.bert(pair).logits
-
-        return outputs
 
 
 class RSTModel(nn.Module):
