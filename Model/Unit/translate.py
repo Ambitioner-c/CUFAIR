@@ -20,6 +20,7 @@ class BaiduTranslate:
             from_lang: str = 'en',
             to_lang: str = 'zh'
     ) -> json:
+        query = query.replace('\n', ' ')
         headers, payload = self.build_request(query, from_lang, to_lang)
         response: json = requests.post(self.url, params=payload, headers=headers).json()
         return response
