@@ -2,6 +2,7 @@
 # @Author: Fulai Cui (cuifulai@mail.hfut.edu.cn)
 # @Time: 2024/9/3 10:24
 import random
+import re
 
 
 def coloring(content: str, color: str=None) -> str:
@@ -40,8 +41,16 @@ def coloring(content: str, color: str=None) -> str:
     return f'{colors[color]}{content}\033[0m'
 
 
+def decoloring(content: str) -> str:
+    return re.findall(r'\033\[\d+m(.+?)\033\[0m', content)[0]
+
+
 def main():
-    print(coloring('Hello, World!', 'red'))
+    colorful = coloring('Hello, World!', 'red')
+    print(colorful)
+
+    monochrome = decoloring(colorful)
+    print(monochrome)
 
 
 if __name__ == '__main__':
