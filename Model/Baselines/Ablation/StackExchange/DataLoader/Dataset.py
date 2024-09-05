@@ -8,7 +8,10 @@ from torch import Tensor
 from torch.utils.data import Dataset, DataLoader, random_split
 from transformers import PreTrainedTokenizer, AutoTokenizer, set_seed
 
-from Model.Baselines.Ablation.StackExchange.DataLoader.DataProcessor import SEProcessor
+from Model.Baselines.Ablation.StackExchange.DataLoader.DataProcessor import (
+    SEProcessor,
+    AnnotatedSEProcessor
+)
 
 from warnings import simplefilter
 simplefilter(action='ignore', category=FutureWarning)
@@ -74,21 +77,91 @@ class SEDataset(Dataset):
         }
 
 
+class AnnotatedSEDataset(Dataset):
+    def __init__(
+            self,
+            tokenizer: PreTrainedTokenizer,
+            data_dir: str,
+            data_name: str,
+            model_name: str,
+            limit: int = 0,
+            mode: str = 'All',
+            max_length: Optional[int] = None
+    ):
+        self.processor = AnnotatedSEProcessor(
+            data_name=data_name,
+            model_name=model_name,
+            limit=limit
+        )
+
+        self.mode = mode
+        if self.mode == 'All':
+            self.df = self.processor.get_all_examples(data_dir)
+        elif self.mode == 'Train':
+            self.df = self.processor.get_train_examples(data_dir)
+        elif self.mode == 'Dev':
+            self.df = self.processor.get_dev_examples(data_dir)
+        else:
+            self.df = self.processor.get_test_examples(data_dir)
+
+        self.features = self.convert_examples_to_features(self.df, tokenizer, max_length)
+        self.labels = Tensor(self.df['label']).long()
+
+    @staticmethod
+    def convert_examples_to_features(
+            examples: pd.DataFrame,
+            tokenizer: PreTrainedTokenizer,
+            max_length: Optional[int] = None,
+    ) -> Tensor:
+        if max_length is None:
+            max_length = tokenizer.model_max_length
+
+        features = tokenizer(
+            examples['left'].tolist(),
+            examples['right'].tolist(),
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors='pt'
+        )['input_ids']
+
+        return features
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        return {
+            'feature': self.features[idx],
+            'label': self.labels[idx],
+        }
+
+
 def main():
     set_seed(2024)
 
     data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
     data_name = 'meta.stackoverflow.com'
+    model_name = 'gpt-4o-2024-08-06'
 
     pretrained_model_path = '/data/cuifulai/PretrainedModel/bert-base-uncased'
     tokenizer = AutoTokenizer.from_pretrained(pretrained_model_path)
 
-    all_dataset = SEDataset(
+    # all_dataset = SEDataset(
+    #     tokenizer,
+    #     data_dir,
+    #     data_name,
+    #     limit=0,
+    #     threshold=0.5,
+    #     mode='All',
+    #     max_length=256
+    # )
+    all_dataset = AnnotatedSEDataset(
         tokenizer,
         data_dir,
         data_name,
+        model_name,
         limit=0,
-        threshold=0.5,
         mode='All',
         max_length=256
     )
