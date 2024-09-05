@@ -44,7 +44,7 @@ class SEDataset(Dataset):
         else:
             self.df = self.processor.get_test_examples(data_dir)
 
-        self.features = self.convert_examples_to_features(self.df, tokenizer, max_length)
+        self.left_features, self.right_features, self.pair_features = self.convert_examples_to_features(self.df,tokenizer,max_length)
         self.labels = Tensor(self.df['label']).long()
 
     @staticmethod
@@ -52,11 +52,27 @@ class SEDataset(Dataset):
             examples: pd.DataFrame,
             tokenizer: PreTrainedTokenizer,
             max_length: Optional[int] = None,
-    ) -> Tensor:
+    ) -> [Tensor]:
         if max_length is None:
             max_length = tokenizer.model_max_length
 
-        features = tokenizer(
+        left_features = tokenizer(
+            examples['left'].tolist(),
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors='pt'
+        )['input_ids']
+
+        right_features = tokenizer(
+            examples['right'].tolist(),
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors='pt'
+        )['input_ids']
+
+        pair_features = tokenizer(
             examples['left'].tolist(),
             examples['right'].tolist(),
             padding=True,
@@ -65,14 +81,16 @@ class SEDataset(Dataset):
             return_tensors='pt'
         )['input_ids']
 
-        return features
+        return left_features, right_features, pair_features
 
     def __len__(self):
         return len(self.labels)
 
     def __getitem__(self, idx):
         return {
-            'feature': self.features[idx],
+            'left': self.left_features[idx],
+            'right': self.right_features[idx],
+            'pair': self.pair_features[idx],
             'label': self.labels[idx],
         }
 
@@ -104,7 +122,7 @@ class AnnotatedSEDataset(Dataset):
         else:
             self.df = self.processor.get_test_examples(data_dir)
 
-        self.features = self.convert_examples_to_features(self.df, tokenizer, max_length)
+        self.left_features, self.right_features, self.pair_features = self.convert_examples_to_features(self.df, tokenizer, max_length)
         self.labels = Tensor(self.df['label']).long()
 
     @staticmethod
@@ -112,11 +130,27 @@ class AnnotatedSEDataset(Dataset):
             examples: pd.DataFrame,
             tokenizer: PreTrainedTokenizer,
             max_length: Optional[int] = None,
-    ) -> Tensor:
+    ) -> [Tensor]:
         if max_length is None:
             max_length = tokenizer.model_max_length
 
-        features = tokenizer(
+        left_features = tokenizer(
+            examples['left'].tolist(),
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors='pt'
+        )['input_ids']
+
+        right_features = tokenizer(
+            examples['right'].tolist(),
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors='pt'
+        )['input_ids']
+
+        pair_features = tokenizer(
             examples['left'].tolist(),
             examples['right'].tolist(),
             padding=True,
@@ -125,14 +159,16 @@ class AnnotatedSEDataset(Dataset):
             return_tensors='pt'
         )['input_ids']
 
-        return features
+        return left_features, right_features, pair_features
 
     def __len__(self):
         return len(self.labels)
 
     def __getitem__(self, idx):
         return {
-            'feature': self.features[idx],
+            'left': self.left_features[idx],
+            'right': self.right_features[idx],
+            'pair': self.pair_features[idx],
             'label': self.labels[idx],
         }
 
@@ -167,9 +203,13 @@ def main():
     )
     all_dataloader = DataLoader(all_dataset, batch_size=32, shuffle=False)
     for example in all_dataloader:
-        feature = example['feature']
+        left_feature = example['left']
+        right_feature = example['right']
+        pair_feature = example['pair']
         label = example['label']
-        print(feature)
+        print(left_feature)
+        print(right_feature)
+        print(pair_feature)
         print(label)
 
         break
