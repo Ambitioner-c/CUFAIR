@@ -45,29 +45,37 @@ class GUIAnnotation:
         self.selected_option = tk.IntVar()
 
         correct_button = tk.Radiobutton(self.root, text="Correct", variable=self.selected_option, value=0, bg='red', command=lambda: logging.info(f"[Select] {self.page if self.page >= 0 else self.page + self.length}:{self.selected_option.get()}"))
-        correct_button.grid(row=4, column=0, padx=10, pady=10)
+        correct_button.grid(row=5, column=0, padx=10, pady=5)
         incorrect_button = tk.Radiobutton(self.root, text="Incorrect", variable=self.selected_option, value=1, bg='green', command=lambda: logging.info(f"[Select] {self.page if self.page >= 0 else self.page + self.length}:{self.selected_option.get()}"))
-        incorrect_button.grid(row=4, column=1, padx=10, pady=10)
+        incorrect_button.grid(row=5, column=1, padx=10, pady=5)
 
     def draw_navigation_buttons(self):
         def next_page():
             logging.info(f"[Decision] {self.page if self.page >= 0 else self.page + self.length}:{self.selected_option.get()}")
             self.page += 1
-            self.place(self.objs[self.page])
+            try:
+                self.place(self.objs[self.page])
+            except IndexError:
+                logging.info("[Info] End of the file: forward")
+                exit(0)
             logging.info(f"[Action] {self.page-1 if self.page-1 >= 0 else self.page-1 + self.length}->{self.page if self.page >= 0 else self.page + self.length}")
-            logging.info(f"[Page] {self.page}")
+            logging.info(f"[Page] {self.page if self.page >= 0 else self.page + self.length}")
 
         def previous_page():
             logging.info(f"[Decision] {self.page if self.page >= 0 else self.page + self.length}:{self.selected_option.get()}")
             self.page -= 1
-            self.place(self.objs[self.page])
+            try:
+                self.place(self.objs[self.page])
+            except IndexError:
+                logging.info("[Info] End of the file: back forward")
+                exit(0)
             logging.info(f"[Action] {self.page+1 if self.page+1 >= 0 else self.page+1 + self.length}->{self.page if self.page >= 0 else self.page + self.length}")
-            logging.info(f"[Page] {self.page}")
+            logging.info(f"[Page] {self.page if self.page >= 0 else self.page + self.length}")
 
         previous_button = tk.Button(self.root, text="Previous", command=previous_page)
-        previous_button.grid(row=5, column=0, padx=10, pady=10)
+        previous_button.grid(row=6, column=0, padx=10, pady=5)
         next_button = tk.Button(self.root, text="Next", command=next_page)
-        next_button.grid(row=5, column=1, padx=10, pady=10)
+        next_button.grid(row=6, column=1, padx=10, pady=5)
 
     def clear(self):
         for widget in self.root.winfo_children():
@@ -77,32 +85,50 @@ class GUIAnnotation:
     def place(self, obj: json):
         self.clear()
 
+        # Prompt
+        prompt_origi_frame = self.get_frame(row=0, column=0, anchor="w", bg='#deebf7')
+        prompt_trans_frame = self.get_frame(row=0, column=1, anchor="e", bg='#deebf7')
+        self.fix_grid(prompt_origi_frame, **{"1": 30})
+        self.fix_grid(prompt_trans_frame, **{"1": 30})
+        self.get_prompt(
+            prompt_origi_frame,
+            'Task Description',
+            'origi',
+            "Here are two interacting comments from a community Q&A platform (Stack Overflow): Left.Content and Right.Content, where Right is a reply to Left (either explicitly or implicitly mentioning other user @name).\nWe aim to assess the relative importance of the two comments based on Rhetorical Structure Theory (RST), a method used to describe potential structural relations between two texts (Nucleus-Satellite (N-S, Left is importance than Right), Satellite-Nucleus (S-N, Right is importance than Left), Nucleus-Nucleus (N-N, Left is as important as Right), where the Nucleus is considered more important than the Satellite).\nUsing prompt engineering, we employed the gpt-4o-2024-08-06 model to generate possible structural relations, including the types and explanations of both comments, the type, subtype, and description of the relation, as well as the final relation category.\n You are required to first provide your own assessment of the relative importance of the two texts without external help (without clicking Show), and then optionally view the judgment given by GPT-4o. You need to check and judge whether the relation category is reasonable."
+        )
+        self.get_prompt(
+            prompt_trans_frame,
+            'Task Description',
+            'trans',
+            "这里展示了社区问答平台上两个存在交互的评论：Left.Content和Right.Content，其中，Right是Left的回复（显式或隐式的@了被回复者）。\n我们试图根据修辞结构理论（rhetorical structure theory, RST），一种描述两个文本可能的结构关系（Nucleus-Satellite (N-S，Left比Right更重要), Satellite-Nucleus (S-N，Right比Left更重要), Nucleus-Nucleus (N-N，Left和Right都重要)，其中Nucleus（核）相对Satellite（卫星）更重要）的方法，来判断两个评论的相对重要性。\n我们通过提示工程的方式，使用gpt-4o-2024-08-06模型生成了可能的结构关系，其中包括两个评论的类型和解释，关系的类型、子类型和描述以及最终的分类判断。\n您需要首先在无外界帮助（不点击Show）的情况下给出您自认为的两个文本的相对重要性，然后可选择性的查看GPT-4o给出的判断。您最终需要查看并判断关系分类是否合理。"
+        )
+
         # Left
-        left_origi_frame = self.get_frame(row=0, column=0, anchor="w", bg='#e2f0d9')
-        left_trans_frame = self.get_frame(row=0, column=1, anchor="e", bg='#deebf7')
+        left_origi_frame = self.get_frame(row=1, column=0, anchor="w", bg='#e2f0d9')
+        left_trans_frame = self.get_frame(row=1, column=1, anchor="e", bg='#e2f0d9')
         self.fix_grid(left_origi_frame, **{"1": 30, "3": 70})
         self.fix_grid(left_trans_frame, **{"1": 30, "3": 70})
         self.get_component(left_origi_frame, obj['左节点(left)'], 'Left', 'origi')
         self.get_component(left_trans_frame, obj['左节点(left)'], 'Left', 'trans')
 
         # Right
-        right_origi_frame = self.get_frame(row=1, column=0, anchor="w", bg='#fff2cc')
-        right_trans_frame = self.get_frame(row=1, column=1, anchor="e", bg='#ededed')
+        right_origi_frame = self.get_frame(row=2, column=0, anchor="w", bg='#fff2cc')
+        right_trans_frame = self.get_frame(row=2, column=1, anchor="e", bg='#fff2cc')
         self.fix_grid(right_origi_frame, **{"1": 30, "3": 70})
         self.fix_grid(right_trans_frame, **{"1": 30, "3": 70})
         self.get_component(right_origi_frame, obj['右节点(right)'], 'Right', 'origi')
         self.get_component(right_trans_frame, obj['右节点(right)'], 'Right', 'trans')
 
         # Relation
-        relation_origi_frame = self.get_frame(row=2, column=0, anchor="w", bg='#dae3f3')
-        relation_trans_frame = self.get_frame(row=2, column=1, anchor="e", bg='#d6dce5')
+        relation_origi_frame = self.get_frame(row=3, column=0, anchor="w", bg='#dae3f3')
+        relation_trans_frame = self.get_frame(row=3, column=1, anchor="e", bg='#dae3f3')
         self.fix_grid(relation_origi_frame, **{"1": 30, "2": 30, "3": 70})
         self.fix_grid(relation_trans_frame, **{"1": 30, "2": 30, "3": 70})
         self.get_component(relation_origi_frame, obj['关系(relation)'], 'Relation', 'origi')
         self.get_component(relation_trans_frame, obj['关系(relation)'], 'Relation', 'trans')
 
         # Category
-        category_frame = self.get_frame(row=3, column=0, anchor="w", bg='#fbe5d6', columnspan=2)
+        category_frame = self.get_frame(row=4, column=0, anchor="w", bg='#fbe5d6', columnspan=2)
         self.fix_grid(category_frame, **{"1": 30})
         self.get_category(category_frame, 'Category', obj['类别(category)'])
 
@@ -120,10 +146,35 @@ class GUIAnnotation:
     ):
         frame = tk.Frame(self.root, bg=bg)
         if columnspan:
-            frame.grid(row=row, column=column, padx=10, pady=10, columnspan=columnspan)
+            frame.grid(row=row, column=column, padx=10, pady=5, columnspan=columnspan)
         else:
-            frame.grid(row=row, column=column, padx=10, pady=10, sticky=anchor)
+            frame.grid(row=row, column=column, padx=10, pady=5, sticky=anchor)
         return frame
+
+    @staticmethod
+    def get_prompt(
+            frame: tk.Frame,
+            span: str,
+            mode: Literal['origi', 'trans'],
+            text: str
+    ):
+        head = tk.Label(frame, text=span, font=("Arial", 10, "bold"))
+        head.grid(row=0, column=0, padx=5, columnspan=2)
+
+        if mode == 'origi':
+            attrs = {'label': 'Detail','foot': 'Arial'}
+        elif mode == 'trans':
+            attrs = {'label': '详情', 'foot': '黑体'}
+        else:
+            raise ValueError(f"Invalid mode: {mode}")
+
+        prompt_label = tk.Label(frame, text=attrs['label'], font=(attrs['foot'], 10))
+        prompt_label.grid(row=1, column=0, padx=5)
+
+        prompt_text = scrolledtext.ScrolledText(frame, wrap=tk.WORD, width=50, height=5)
+        prompt_text.insert(tk.INSERT, text)
+        prompt_text.config(state=tk.DISABLED)
+        prompt_text.grid(row=1, column=1, padx=5)
 
     def get_category(
             self,
