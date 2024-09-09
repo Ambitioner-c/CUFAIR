@@ -339,8 +339,8 @@ class GUIAnnotation:
         logging.info("[Info] Window created")
 
 
-def configure_logging():
-    file_path = os.path.abspath(f'./meta.stackoverflow.com/Annotation/gpt-4o-2024-08-06/logs/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log')
+def configure_logging(name: str):
+    file_path = os.path.abspath(f'logs/{name}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log')
     template = '%(asctime)s - %(levelname)s - %(message)s'
     logging.basicConfig(
         filename=file_path,
@@ -350,9 +350,11 @@ def configure_logging():
 
 
 def main():
-    configure_logging()
+    name = input("请输入您的名字全拼（例如：cuifulai）：")
 
-    sample_path = os.path.abspath('./meta.stackoverflow.com/Annotation/gpt-4o-2024-08-06/samples.txt')
+    configure_logging(name)
+
+    sample_path = os.path.abspath('samples.txt')
     gui = GUIAnnotation(sample_path)
     gui.run()
 
