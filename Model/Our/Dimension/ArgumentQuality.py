@@ -3,19 +3,27 @@
 # @Time: 2024/9/10 11:23
 import re
 import html
+from pprint import pprint
 
 
 class ArgumentQuality:
     def __init__(self):
-        pass
+        self.depth = {
+            'num_characters': 0,
+            'num_words': 0,
+            'num_unique_words': 0,
+            'num_sentences': 0,
+            'num_nomenclature': 0,
+            'num_web_links': 0,
+            'num_quotations': 0
+        }
 
     def get_quality(self, text: str):
         text = self.unescape_html(text)
-        depth = self.get_depth(text)
-        print(depth)
 
-    @staticmethod
-    def get_depth(text: str):
+        self.get_depth(text)
+
+    def get_depth(self, text: str):
         # Number of characters in an answer
         num_characters = len(text.replace(' ', ''))
 
@@ -43,7 +51,16 @@ class ArgumentQuality:
         # Number of quotations in an answer
         num_quotations = len(re.findall(r'(\[.+?]\(.+?\))', text))
 
-        return [num_characters, num_words, num_unique_words, num_sentences, num_nomenclature, num_web_links, num_quotations]
+        self.depth = {
+            'num_characters': num_characters,
+            'num_words': num_words,
+            'num_unique_words': num_unique_words,
+            'num_sentences': num_sentences,
+            'num_nomenclature': num_nomenclature,
+            'num_web_links': num_web_links,
+            'num_quotations': num_quotations
+        }
+
 
     def get_readability(self):
         pass
@@ -73,6 +90,7 @@ def main():
 
     argument_quality = ArgumentQuality()
     argument_quality.get_quality(text)
+    pprint(argument_quality.depth)
 
 
 if __name__ == '__main__':
