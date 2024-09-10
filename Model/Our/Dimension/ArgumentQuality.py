@@ -40,15 +40,15 @@ class ArgumentQuality:
             'num_question_marks': 0
         }
 
-    def get_quality(self, text: str):
-        text = self.unescape_html(text)
+    def get_quality(self, answer: str):
+        answer = self.unescape_html(answer)
 
-        self.get_depth(text)
-        self.get_readability(text)
+        self.get_depth(answer)
+        self.get_readability(answer)
 
-    def get_depth(self, text: str):
+    def get_depth(self, answer: str):
         # Number of characters in an answer
-        num_characters = len(text.replace(' ', ''))
+        num_characters = len(answer.replace(' ', ''))
 
         def replace_link(_text):
             for old in re.findall(r'(\[.+?]\(.+?\))', _text):
@@ -56,23 +56,23 @@ class ArgumentQuality:
             return _text
 
         # Number of words in an answer
-        words = re.sub(r'[^\w\s]', '', replace_link(text)).split()
+        words = re.sub(r'[^\w\s]', '', replace_link(answer)).split()
         num_words = len(words)
 
         # Number of unique words in an answer
         num_unique_words = len(set(words))
 
         # Number of sentences in an answer
-        num_sentences = len(re.split(r'[.!?][\'\"]? ', text))
+        num_sentences = len(re.split(r'[.!?][\'\"]? ', answer))
 
         # Number of nomenclature (e.g., programming code, math formula) in an answer
-        num_nomenclature = len(re.findall(r'```.+?```', text))
+        num_nomenclature = len(re.findall(r'```.+?```', answer))
 
         # Number of web links in an answer
-        num_web_links = len(re.findall(r'https?://', text))
+        num_web_links = len(re.findall(r'https?://', answer))
 
         # Number of quotations in an answer
-        num_quotations = len(re.findall(r'(\[.+?]\(.+?\))', text))
+        num_quotations = len(re.findall(r'(\[.+?]\(.+?\))', answer))
 
         self.depth = {
             'num_characters': num_characters,
@@ -84,7 +84,7 @@ class ArgumentQuality:
             'num_quotations': num_quotations
         }
 
-    def get_readability(self, text: str):
+    def get_readability(self, answer: str):
         # Number of nouns, adjectives, comparatives, verbs, adverbs, punctuation, and symbols in an answer
         counts = Counter({
             'NOUN': 0,
@@ -95,7 +95,7 @@ class ArgumentQuality:
             'PUNCT': 0,
             'SYM': 0
         })
-        doc = self.nlp(text)
+        doc = self.nlp(answer)
         for token in doc:
             if token.pos_ == 'NOUN':
                 counts['NOUN'] += 1
@@ -136,10 +136,18 @@ class ArgumentQuality:
         self.readability['num_wh_words'] = num_wh_words
 
         # Number of question marks in an answer
-        num_question_marks = text.count('?')
+        num_question_marks = answer.count('?')
         self.readability['num_question_marks'] = num_question_marks
 
-    def get_objectivity(self):
+    def get_objectivity(self, answer: str):
+        # Number of “thank” words of the question asker or community users to the answerer in an answer-thread
+
+        # Ratio of positive and negative words of the question asker to the answerer in an answer-thread
+
+        # Ratio of positive and negative words of the community users to the answerer in an answer-thread
+
+        # Ratio of positive and negative words in an answer
+
         pass
 
     def get_timeliness(self):
