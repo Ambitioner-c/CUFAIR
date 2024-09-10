@@ -40,7 +40,7 @@ class Annotation(BaseModel):
 
 
 class PingMatch:
-    def main(self, answer: ElementTree.Element) -> ([str], [int], [str]):
+    def main(self, answer: ElementTree.Element) -> ([str], [int], [str], [int]):
         a_name = answer.attrib['OWNER_DISPLAY_NAME']
 
         participants: [str] = list()
