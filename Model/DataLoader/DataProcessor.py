@@ -48,6 +48,7 @@ class OurProcessor(DataProcessor, ABC):
 
     def create_examples(self, filepath: str) -> pd.DataFrame:
         q_ids: [str] = []
+        q_names: [str] = []
         q_titles: [str] = []
         q_bodys: [str] = []
         a_ids: [list] = []
@@ -62,6 +63,7 @@ class OurProcessor(DataProcessor, ABC):
             # Question
             question = elem.find('Question')
             q_ids.append(question.attrib['ID'])
+            q_names.append(question.attrib['OWNER_DISPLAY_NAME'])
             q_titles.append(question.find('QTitle').text)
             q_bodys.append(question.find('QBody').text)
 
@@ -101,6 +103,7 @@ class OurProcessor(DataProcessor, ABC):
 
         df = pd.DataFrame({
             'QID': q_ids,
+            'QName': q_names,
             'QTitle': q_titles,
             'QBody': q_bodys,
             'AID': a_ids,
