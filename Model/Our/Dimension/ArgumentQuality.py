@@ -40,11 +40,26 @@ class ArgumentQuality:
             'num_question_marks': 0
         }
 
-    def get_quality(self, answer: str):
+        self.objectivity = {
+            'num_thank_words': 0,
+            'ratio_positive_negative_words_asker': 0.0,
+            'ratio_positive_negative_words_users': 0.0,
+            'ratio_positive_negative_words_answer': 0.0
+        }
+
+    def get_quality(
+            self,
+            answer: str,
+            comments: list[str],
+            q_name: str,
+            participants: list[str],
+            pings: list[int]
+    ):
         answer = self.unescape_html(answer)
 
         self.get_depth(answer)
         self.get_readability(answer)
+        self.get_objectivity(answer, comments, q_name, participants, pings)
 
     def get_depth(self, answer: str):
         # Number of characters in an answer
@@ -114,21 +129,21 @@ class ArgumentQuality:
 
         # Ratio of nouns, adjectives, comparatives, verbs, adverbs, punctuation, and symbols in an answer
         self.readability = {
-            'ratio_nouns': counts['NOUN'] / len(doc),
-            'ratio_adjectives': counts['ADJ'] / len(doc),
-            'ratio_comparatives': counts['COMP'] / len(doc),
-            'ratio_verbs': counts['VERB'] / len(doc),
-            'ratio_adverbs': counts['ADV'] / len(doc),
-            'ratio_punctuation': counts['PUNCT'] / len(doc),
-            'ratio_symbols': counts['SYM'] / len(doc)
+            'ratio_nouns': round(counts['NOUN'] / len(doc), 4),
+            'ratio_adjectives': round(counts['ADJ'] / len(doc), 4),
+            'ratio_comparatives': round(counts['COMP'] / len(doc), 4),
+            'ratio_verbs': round(counts['VERB'] / len(doc), 4),
+            'ratio_adverbs': round(counts['ADV'] / len(doc), 4),
+            'ratio_punctuation': round(counts['PUNCT'] / len(doc), 4),
+            'ratio_symbols': round(counts['SYM'] / len(doc), 4)
         }
 
         # Characters to sentences ratio in an answer
-        ratio_characters_sentences = self.depth['num_characters'] / self.depth['num_sentences']
+        ratio_characters_sentences = round(self.depth['num_characters'] / self.depth['num_sentences'], 4)
         self.readability['ratio_characters_sentences'] = ratio_characters_sentences
 
         # Words to sentences ratio in an answer
-        ratio_words_sentences = self.depth['num_words'] / self.depth['num_sentences']
+        ratio_words_sentences = round(self.depth['num_words'] / self.depth['num_sentences'], 4)
         self.readability['ratio_words_sentences'] = ratio_words_sentences
 
         # Number of “wh”-type words in an answer
@@ -139,16 +154,110 @@ class ArgumentQuality:
         num_question_marks = answer.count('?')
         self.readability['num_question_marks'] = num_question_marks
 
-    def get_objectivity(self, answer: str):
+    def get_objectivity(self, answer: str, comments: list[str], q_name: str, participants: list[str], pings: list[int]):
+        a_name = participants[0]
+
         # Number of “thank” words of the question asker or community users to the answerer in an answer-thread
+        content = ''
+        for idx, ping in enumerate(pings):
+            if participants[idx + 1] != a_name and participants[ping] == a_name:
+                content += comments[idx]
+        # Thank you, Thanks, Thx (Thanks), Ty (Thank you), TYVM (Thank you very much), TYSM (Thank you so much), Appreciate, Cheers, Grateful, Gratitude, etc.
+        num_thank_words = (
+                content.lower().count('thank')
+                + content.lower().count('thx')
+                + content.lower().count('ty')
+                + content.lower().count('appreciate')
+                + content.lower().count('cheers')
+                + content.lower().count('grateful')
+                + content.lower().count('gratitude')
+        )
 
         # Ratio of positive and negative words of the question asker to the answerer in an answer-thread
+        content = ''
+        for idx, ping in enumerate(pings):
+            if participants[idx + 1] == q_name and participants[ping] == a_name:
+                content += comments[idx]
+        # Positive words: Good, Great, Excellent, Wonderful, Fantastic, Amazing, Awesome, Superb, Perfect, etc.
+        # Negative words: Bad, Poor, Terrible, Horrible, Awful, Disgusting, Disappointing, etc.
+        num_positive_words = (
+                content.lower().count('good')
+                + content.lower().count('great')
+                + content.lower().count('excellent')
+                + content.lower().count('wonderful')
+                + content.lower().count('fantastic')
+                + content.lower().count('amazing')
+                + content.lower().count('awesome')
+                + content.lower().count('superb')
+                + content.lower().count('perfect')
+        )
+        num_negative_words = (
+                content.lower().count('bad')
+                + content.lower().count('poor')
+                + content.lower().count('terrible')
+                + content.lower().count('horrible')
+                + content.lower().count('awful')
+                + content.lower().count('disgusting')
+                + content.lower().count('disappointing')
+        )
+        ratio_positive_negative_words_asker = round(num_positive_words / (num_negative_words + 0.0001), 4)
 
         # Ratio of positive and negative words of the community users to the answerer in an answer-thread
+        content = ''
+        for idx, ping in enumerate(pings):
+            if participants[idx + 1] != q_name and participants[idx + 1] != a_name and participants[ping] == a_name:
+                content += comments[idx]
+        num_positive_words = (
+                content.lower().count('good')
+                + content.lower().count('great')
+                + content.lower().count('excellent')
+                + content.lower().count('wonderful')
+                + content.lower().count('fantastic')
+                + content.lower().count('amazing')
+                + content.lower().count('awesome')
+                + content.lower().count('superb')
+                + content.lower().count('perfect')
+        )
+        num_negative_words = (
+                content.lower().count('bad')
+                + content.lower().count('poor')
+                + content.lower().count('terrible')
+                + content.lower().count('horrible')
+                + content.lower().count('awful')
+                + content.lower().count('disgusting')
+                + content.lower().count('disappointing')
+        )
+        ratio_positive_negative_words_users = round(num_positive_words / (num_negative_words + 0.0001), 4)
 
         # Ratio of positive and negative words in an answer
+        num_positive_words = (
+                answer.lower().count('good')
+                + answer.lower().count('great')
+                + answer.lower().count('excellent')
+                + answer.lower().count('wonderful')
+                + answer.lower().count('fantastic')
+                + answer.lower().count('amazing')
+                + answer.lower().count('awesome')
+                + answer.lower().count('superb')
+                + answer.lower().count('perfect')
+        )
+        num_negative_words = (
+                answer.lower().count('bad')
+                + answer.lower().count('poor')
+                + answer.lower().count('terrible')
+                + answer.lower().count('horrible')
+                + answer.lower().count('awful')
+                + answer.lower().count('disgusting')
+                + answer.lower().count('disappointing')
+        )
+        ratio_positive_negative_words_answer = round(num_positive_words / (num_negative_words + 0.0001), 4)
 
-        pass
+        self.objectivity = {
+            'num_thank_words': num_thank_words,
+            'ratio_positive_negative_words_asker': ratio_positive_negative_words_asker,
+            'ratio_positive_negative_words_users': ratio_positive_negative_words_users,
+            'ratio_positive_negative_words_answer': ratio_positive_negative_words_answer
+        }
 
     def get_timeliness(self):
         pass
@@ -171,12 +280,36 @@ def main():
     spacy_path = "/data/cuifulai/Spacy/en_core_web_sm-3.7.1/en_core_web_sm/en_core_web_sm-3.7.1"
     nlp = spacy.load(spacy_path)
 
-    text = "$ So bigger. What is your name? Why. Beautiful. I saw &quot;John Smith&quot; yesterday. &quot;Really?&quot; he asked! ```Python``` [Google](https://www.google.com) ```Programming``` [Baidu](http://www.baidu.com)"
+    answer = "$ So good. What is your name? Why. Beautiful. I saw &quot;John Smith&quot; yesterday. &quot;Really?&quot; he asked! ```Python``` [Google](https://www.google.com) ```Programming``` [Baidu](http://www.baidu.com)"
+    comments = [
+        "Thank you for your answer, thx.",
+        "Good answer.",
+        "Ok.",
+        "Great answer! Thanks.",
+        "Perfect answer! TYVM."
+    ]
+    q_name = 'Alice'
+    participants = [
+        'Bob',
+        'Charlie',
+        'Alice',
+        'Alice',
+        'Tom',
+        'Jerry'
+    ]
+    pings = [
+        0,
+        0,
+        1,
+        2,
+        0
+    ]
 
     argument_quality = ArgumentQuality(nlp)
-    argument_quality.get_quality(text)
+    argument_quality.get_quality(answer, comments, q_name, participants, pings)
     pprint(argument_quality.depth)
     pprint(argument_quality.readability)
+    pprint(argument_quality.objectivity)
 
 
 if __name__ == '__main__':
