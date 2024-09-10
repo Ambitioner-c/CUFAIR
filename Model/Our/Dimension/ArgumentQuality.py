@@ -69,7 +69,7 @@ class ArgumentQuality:
 
 
 def main():
-    text = "X XX &quot;XXX XXX&quot; XXXX. &quot;XXX?&quot; XXXX! ```XXX``` [XXXX](https://www.google.com) ```python``` [XX](http://www.baidu.com)"
+    text = "X XX &quot;XXX XXX&quot; XXXX. &quot;XXX?&quot; XXXX! ```XXX``` [XXXX](https://www.google.com) ```XXXX``` [XX](http://www.baidu.com)"
 
     argument_quality = ArgumentQuality()
     argument_quality.get_quality(text)
