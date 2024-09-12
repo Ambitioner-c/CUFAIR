@@ -186,11 +186,11 @@ def parse_args():
                         help='Model name')
     parser.add_argument('--temperature', type=float, default=0.0,
                         help='Temperature')
-    parser.add_argument('--max_tokens', type=int, default=1024,
+    parser.add_argument('--max_tokens', type=int, default=2048,
                         help='Max tokens')
-    parser.add_argument('--sample_size', type=int, default=200,
+    parser.add_argument('--sample_size', type=int, default=11000,
                         help='Sample size')
-    parser.add_argument('--error', type=Optional[int], default=117,
+    parser.add_argument('--error', type=Optional[int], default=10612,
                         help='Error')
 
     return parser.parse_args()
