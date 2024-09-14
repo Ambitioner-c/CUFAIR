@@ -398,7 +398,10 @@ class AnnotatedSEProcessor(DataProcessor, ABC):
         pass
 
     def create_examples(self, filepath: str) -> pd.DataFrame:
-        sampled_idxs = random.sample(range(self.sample[1]), self.sample[0])
+        if self.show or self.save:
+            sampled_idxs = random.sample(range(self.sample[1]), self.sample[0])
+        else:
+            sampled_idxs = None
 
         lefts: [str] = []
         rights: [str] = []
@@ -409,6 +412,9 @@ class AnnotatedSEProcessor(DataProcessor, ABC):
                 if idx in sampled_idxs:
                     self.visualize(annotation, self.show, self.save, self.translator)
 
+            if 'N-N' in annotation['category']:
+                continue
+
             lefts.append(annotation['left']['content'])
             rights.append(annotation['right']['content'])
 
@@ -417,8 +423,8 @@ class AnnotatedSEProcessor(DataProcessor, ABC):
                     return 0
                 elif 'S-N' in _category:
                     return 1
-                elif 'N-N' in _category:
-                    return 2
+                # elif 'N-N' in _category:
+                #     return 2
                 else:
                     raise ValueError(f"Unknown category: {_category}")
 
@@ -555,12 +561,13 @@ def main():
         data_name,
         model_name,
         limit=0,
-        show=True,
-        save=save,
-        sample=[100, 1000],
-        translator=translator
+        show=False,
+        save=None,
+        sample=None,
+        translator=None
     ).get_all_examples(data_dir)
     # print(df.head(10).to_csv())
+    print('All: ', df['label'].value_counts())
 
 
 if __name__ == '__main__':
