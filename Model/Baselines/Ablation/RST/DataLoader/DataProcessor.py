@@ -422,11 +422,11 @@ class RSTProcessor(DataProcessor, ABC):
                 labels.append(1)
 
             # N-N
-            for idx in n_n_pairs:
-                for j in range(len(n_n_pairs[idx]) - 1):
-                    lefts.append(list(n_n_pairs[idx][j].values())[0])
-                    rights.append(list(n_n_pairs[idx][j + 1].values())[0])
-                    labels.append(2)
+            # for idx in n_n_pairs:
+            #     for j in range(len(n_n_pairs[idx]) - 1):
+            #         lefts.append(list(n_n_pairs[idx][j].values())[0])
+            #         rights.append(list(n_n_pairs[idx][j + 1].values())[0])
+            #         labels.append(2)
 
         df = pd.DataFrame({
             'left': lefts,
