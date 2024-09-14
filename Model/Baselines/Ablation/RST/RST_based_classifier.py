@@ -354,7 +354,7 @@ def parse_args():
                         help='Pretrained model path')
     parser.add_argument('--finetuned_model_path', nargs='?', default='/home/cuifulai/Projects/CQA/Model/Baselines/Ablation/RST/FinetunedModel/RST_based_classifier-20240905_113024/best_model.pth',
                         help='Finetuned model path')
-    parser.add_argument('--epochs', type=int, default=3,
+    parser.add_argument('--epochs', type=int, default=5,
                         help='Number of epochs')
     parser.add_argument('--batch_size', type=int, default=128,
                         help='Batch size')
