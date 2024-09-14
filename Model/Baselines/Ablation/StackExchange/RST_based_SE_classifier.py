@@ -29,7 +29,6 @@ from transformers import (
 )
 
 from Model.Baselines.Ablation.StackExchange.DataLoader.Dataset import (
-    SEDataset,
     AnnotatedSEDataset
 )
 from Model.Unit.metrics import (
@@ -37,6 +36,7 @@ from Model.Unit.metrics import (
     precision_score,
     recall_score,
     f1_score,
+    roc_auc_score,
 )
 from Model.Unit.modeling_bert import (
     BertSelfAttention,
@@ -113,8 +113,16 @@ def get_metrics(input: np.array, target: np.array):
     f1 = f1_score(input, target, average='weighted')
     micro_f1 = f1_score(input, target, average='micro')
     macro_f1 = f1_score(input, target, average='macro')
+    try:
+        auc = roc_auc_score(input, target, average='weighted')
+        micro_auc = roc_auc_score(input, target, average='micro')
+        macro_auc = roc_auc_score(input, target, average='macro')
+    except ValueError:
+        auc = 0.5
+        micro_auc = 0.5
+        macro_auc = 0.5
 
-    return acc, (pre, micro_pre, macro_pre), (rec, micro_rec, macro_rec), (f1, micro_f1, macro_f1)
+    return acc, (pre, micro_pre, macro_pre), (rec, micro_rec, macro_rec), (f1, micro_f1, macro_f1), (auc, micro_auc, macro_auc)
 
 
 def mkdir(file_path: str) -> str:
@@ -147,8 +155,8 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
 
     best_model = None
     best_loss = float('inf')
-    best_acc, (best_pre, best_micro_pre, best_macro_pre), (best_rec, best_micro_rec, best_macro_rec), (best_f1, best_micro_f1, best_macro_f1) \
-        = -1, (-1, -1, -1), (-1, -1, -1), (-1, -1, -1)
+    best_acc, (best_pre, best_micro_pre, best_macro_pre), (best_rec, best_micro_rec, best_macro_rec), (best_f1, best_micro_f1, best_macro_f1), (best_auc, best_micro_auc, best_macro_auc) \
+        = -1, (-1, -1, -1), (-1, -1, -1), (-1, -1, -1), (-1, -1, -1)
 
     n = 0
     for epoch in range(epochs):
@@ -173,15 +181,15 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
 
             if n % step == 0:
                 dev_losses = []
-                dev_accs, (dev_pres, dev_micro_pres, dev_macro_pres), (dev_recs, dev_micro_recs, dev_macro_recs), (dev_f1s, dev_micro_f1s, dev_macro_f1s) \
-                    = [], ([], [], []), ([], [], []), ([], [], [])
+                dev_accs, (dev_pres, dev_micro_pres, dev_macro_pres), (dev_recs, dev_micro_recs, dev_macro_recs), (dev_f1s, dev_micro_f1s, dev_macro_f1s), (dev_aucs, dev_micro_aucs, dev_macro_aucs) \
+                    = [], ([], [], []), ([], [], []), ([], [], []), ([], [], [])
                 for dev_sample in dev_dataloader:
                     dev_labels = dev_sample['label']
                     with torch.no_grad():
                         dev_output = model(dev_sample)
 
                         dev_loss = loss_function(input=dev_output, target=dev_labels.view(-1).to(device))
-                        dev_acc, (dev_pre, dev_micro_pre, dev_macro_pre), (dev_rec, dev_micro_rec, dev_macro_rec), (dev_f1, dev_micro_f1, dev_macro_f1) \
+                        dev_acc, (dev_pre, dev_micro_pre, dev_macro_pre), (dev_rec, dev_micro_rec, dev_macro_rec), (dev_f1, dev_micro_f1, dev_macro_f1), (dev_auc, dev_micro_auc, dev_macro_auc) \
                             = get_metrics(dev_output.cpu().numpy(), dev_labels.cpu().numpy())
 
                         dev_losses.append(dev_loss.item())
@@ -195,6 +203,9 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
                         dev_f1s.append(dev_f1)
                         dev_micro_f1s.append(dev_micro_f1)
                         dev_macro_f1s.append(dev_macro_f1)
+                        dev_aucs.append(dev_auc)
+                        dev_micro_aucs.append(dev_micro_auc)
+                        dev_macro_aucs.append(dev_macro_auc)
                 temp_dev_result = (
                     f'{task_name}\t'
                     f'epoch/epochs:{epoch + 1}/{epochs}\t'
@@ -208,7 +219,10 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
                     f'dev_macro_rec:{round(np.mean(dev_macro_recs), 4)}\t'
                     f'{coloring("dev_f1", "purple_bg")}:{round(np.mean(dev_f1s), 4)}\t'
                     f'dev_micro_f1:{round(np.mean(dev_micro_f1s), 4)}\t'
-                    f'dev_macro_f1:{round(np.mean(dev_macro_f1s), 4)}'
+                    f'dev_macro_f1:{round(np.mean(dev_macro_f1s), 4)}\t'
+                    f'{coloring("dev_auc", "cyan_bg")}:{round(np.mean(dev_aucs), 4)}\t'
+                    f'dev_micro_auc:{round(np.mean(dev_micro_aucs), 4)}\t'
+                    f'dev_macro_auc:{round(np.mean(dev_macro_aucs), 4)}'
                 )
                 with open(mkdir(temp_dev_tsv), 'a' if os.path.exists(temp_dev_tsv) else 'w') as f:
                     f.write(decoloring(temp_dev_result) + '\n')
@@ -226,6 +240,9 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
                     best_f1 = np.mean(dev_f1s)
                     best_micro_f1 = np.mean(dev_micro_f1s)
                     best_macro_f1 = np.mean(dev_macro_f1s)
+                    best_auc = np.mean(dev_aucs)
+                    best_micro_auc = np.mean(dev_micro_aucs)
+                    best_macro_auc = np.mean(dev_macro_aucs)
                     best_model = copy.deepcopy(model)
             n += 1
 
@@ -242,7 +259,10 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
         f'best_macro_rec:{best_macro_rec}\t'
         f'{coloring("best_f1", "purple_bg")}:{best_f1}\t'
         f'best_micro_f1:{best_micro_f1}\t'
-        f'best_macro_f1:{best_macro_f1}'
+        f'best_macro_f1:{best_macro_f1}\t'
+        f'{coloring("best_auc", "cyan_bg")}:{best_auc}\t'
+        f'best_micro_auc:{best_micro_auc}\t'
+        f'best_macro_auc:{best_macro_auc}'
     )
     with open(mkdir(best_dev_tsv), 'a' if os.path.exists(best_dev_tsv) else 'w') as f:
         f.write(decoloring(best_dev_result) + '\n')
@@ -257,14 +277,14 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
 def evaluate(args, task_name, model, test_dataloader, timestamp):
     model.eval()
 
-    test_accs, (test_pres, test_micro_pres, test_macro_pres), (test_recs, test_micro_recs, test_macro_recs), (test_f1s, test_micro_f1s, test_macro_f1s) \
-        = [], ([], [], []), ([], [], []), ([], [], [])
+    test_accs, (test_pres, test_micro_pres, test_macro_pres), (test_recs, test_micro_recs, test_macro_recs), (test_f1s, test_micro_f1s, test_macro_f1s), (test_aucs, test_micro_aucs, test_macro_aucs) \
+        = [], ([], [], []), ([], [], []), ([], [], []), ([], [], [])
     for test_sample in test_dataloader:
         test_labels = test_sample['label']
         with torch.no_grad():
             test_output = model(test_sample)
 
-            test_acc, (test_pre, test_micro_pre, test_macro_pre), (test_rec, test_micro_rec, test_macro_rec), (test_f1, test_micro_f1, test_macro_f1) \
+            test_acc, (test_pre, test_micro_pre, test_macro_pre), (test_rec, test_micro_rec, test_macro_rec), (test_f1, test_micro_f1, test_macro_f1), (test_auc, test_micro_auc, test_macro_auc) \
                 = get_metrics(test_output.cpu().numpy(), test_labels.cpu().numpy())
 
             test_accs.append(test_acc)
@@ -277,6 +297,9 @@ def evaluate(args, task_name, model, test_dataloader, timestamp):
             test_f1s.append(test_f1)
             test_micro_f1s.append(test_micro_f1)
             test_macro_f1s.append(test_macro_f1)
+            test_aucs.append(test_auc)
+            test_micro_aucs.append(test_micro_auc)
+            test_macro_aucs.append(test_macro_auc)
     best_test_result = (
         f'{task_name}\t'
         f'{coloring("test_acc", "green_bg")}:{round(np.mean(test_accs), 4)}\t'
@@ -288,7 +311,10 @@ def evaluate(args, task_name, model, test_dataloader, timestamp):
         f'test_macro_rec:{round(np.mean(test_macro_recs), 4)}\t'
         f'{coloring("test_f1", "purple_bg")}:{round(np.mean(test_f1s), 4)}\t'
         f'test_micro_f1:{round(np.mean(test_micro_f1s), 4)}\t'
-        f'test_macro_f1:{round(np.mean(test_macro_f1s), 4)}'
+        f'test_macro_f1:{round(np.mean(test_macro_f1s), 4)}\t'
+        f'{coloring("test_auc", "cyan_bg")}:{round(np.mean(test_aucs), 4)}\t'
+        f'test_micro_auc:{round(np.mean(test_micro_aucs), 4)}\t'
+        f'test_macro_auc:{round(np.mean(test_macro_aucs), 4)}'
     )
     if args.is_train:
         best_test_tsv = f'./Result/Temp/{task_name}-{timestamp}/best_test.tsv'
@@ -310,9 +336,9 @@ def parse_args():
                         help='Model name')
     parser.add_argument('--pretrained_model_path', nargs='?', default='/data/cuifulai/PretrainedModel/bert-base-uncased',
                         help='Pretrained model path')
-    parser.add_argument('--finetuned_model_path', nargs='?', default='/home/cuifulai/Projects/CQA/Model/Baselines/Ablation/RST/FinetunedModel/RST_based_classifier-20240905_113024/best_model.pth',
+    parser.add_argument('--finetuned_model_path', nargs='?', default='/home/cuifulai/Projects/CQA/Model/Baselines/Ablation/RST/FinetunedModel/RST_based_classifier-20240914_113410/best_model.pth',
                         help='Finetuned model path')
-    parser.add_argument('--epochs', type=int, default=3,
+    parser.add_argument('--epochs', type=int, default=5,
                         help='Number of epochs')
     parser.add_argument('--batch_size', type=int, default=128,
                         help='Batch size')
@@ -332,7 +358,7 @@ def parse_args():
                         help='Device')
     parser.add_argument('--freeze', type=bool, default=False,
                         help='Freeze')
-    parser.add_argument('--num_labels', type=int, default=3,
+    parser.add_argument('--num_labels', type=int, default=2,
                         help='Number of labels')
     parser.add_argument('--limit', type=int, default=0,
                         help='Limit')
