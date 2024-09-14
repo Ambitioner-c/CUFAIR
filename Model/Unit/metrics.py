@@ -8,10 +8,15 @@ from sklearn import metrics
 
 
 def confusion_matrix(input: np.array, target: np.array) -> [int]:
+    """
+    :param input:
+    :param target:
+    :return: [tn, fp, fn, tp]
+    """
     y_true = target
     y_pred = np.argmax(input, axis=1)
 
-    return metrics.confusion_matrix(y_true=y_true, y_pred=y_pred)
+    return metrics.confusion_matrix(y_true=y_true, y_pred=y_pred).ravel()
 
 
 def accuracy_score(input: np.array, target: np.array) -> float:
@@ -42,11 +47,11 @@ def f1_score(input: np.array, target: np.array, average: str='weighted') -> floa
     return metrics.f1_score(y_true=y_true, y_pred=y_pred, average=average)
 
 
-def roc_auc_score(input: np.array, target: np.array, average: str='weighted', multi_class: str='ovr') -> float:
+def roc_auc_score(input: np.array, target: np.array, average: str='weighted') -> float:
     y_true = target
-    y_pred = softmax(input, axis=1)
+    y_pred = softmax(input, axis=1)[:, 1]
 
-    return metrics.roc_auc_score(y_true=y_true, y_score=y_pred, average=average, multi_class=multi_class)
+    return metrics.roc_auc_score(y_true=y_true, y_score=y_pred, average=average)
 
 
 def mean_absolute_error():
@@ -68,13 +73,13 @@ def r2_score():
 def main():
     # y_pred = [0, 2, 1, 0, 0, 1]
     # y_true = [0, 1, 2, 0, 1, 2]
-    input = np.array([[2, 1, 0],
-                      [0, 1, 2],
-                      [1, 2, 0],
-                      [2, 0, 1],
-                      [2, 1, 0],
-                      [0, 2, 1]])
-    target = np.array([0, 1, 2, 0, 1, 2])
+    input = np.array([[2, 1],
+                      [0, 1],
+                      [1, 2],
+                      [2, 0],
+                      [2, 1],
+                      [0, 2]])
+    target = np.array([0, 1, 0, 0, 1, 1])
 
     cm = confusion_matrix(input, target)
     print(f'Confusion Matrix: {cm}')
