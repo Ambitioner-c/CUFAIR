@@ -138,9 +138,14 @@ def get_metrics(input: np.array, target: np.array):
     f1 = f1_score(input, target, average='weighted')
     micro_f1 = f1_score(input, target, average='micro')
     macro_f1 = f1_score(input, target, average='macro')
-    auc = roc_auc_score(input, target, average='weighted')
-    micro_auc = roc_auc_score(input, target, average='micro')
-    macro_auc = roc_auc_score(input, target, average='macro')
+    try:
+        auc = roc_auc_score(input, target, average='weighted')
+        micro_auc = roc_auc_score(input, target, average='micro')
+        macro_auc = roc_auc_score(input, target, average='macro')
+    except ValueError:
+        auc = 0.5
+        micro_auc = 0.5
+        macro_auc = 0.5
 
     return acc, (pre, micro_pre, macro_pre), (rec, micro_rec, macro_rec), (f1, micro_f1, macro_f1), (auc, micro_auc, macro_auc)
 
