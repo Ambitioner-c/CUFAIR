@@ -10,3 +10,6 @@
 
 ### GUI
 - gui_annotation.py
+
+### Split
+- split_train_dev_test.py
