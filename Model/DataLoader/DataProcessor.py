@@ -35,13 +35,13 @@ class OurProcessor(DataProcessor, ABC):
         return self.create_examples(os.path.join(data_dir, self.data_name, self.data_name + '.xml'))
 
     def get_train_examples(self, data_dir: str) -> pd.DataFrame:
-        pass
+        return self.create_examples(os.path.join(data_dir, self.data_name, 'Train', 'train.xml'))
 
     def get_dev_examples(self, data_dir: str) -> pd.DataFrame:
-        pass
+        return self.create_examples(os.path.join(data_dir, self.data_name, 'Dev', 'dev.xml'))
 
     def get_test_examples(self, data_dir: str) -> pd.DataFrame:
-        pass
+        return self.create_examples(os.path.join(data_dir, self.data_name, 'Test', 'test.xml'))
 
     def get_labels(self):
         pass
@@ -146,13 +146,21 @@ def main():
     data_name = 'meta.stackoverflow.com'
     limit = 0
 
-    df = OurProcessor(
-        data_name,
-        limit
-    ).get_all_examples(data_dir)
-    example = df.head(1)
-    example = example.to_dict(orient='dict')
-    pprint(example)
+    processor = OurProcessor(data_name, limit)
+    df = processor.get_all_examples(data_dir)
+    # example = df.head(1)
+    # example = example.to_dict(orient='dict')
+    # pprint(example)
+    print(df.shape)
+
+    df = processor.get_train_examples(data_dir)
+    print(df.shape)
+
+    df = processor.get_dev_examples(data_dir)
+    print(df.shape)
+
+    df = processor.get_test_examples(data_dir)
+    print(df.shape)
 
 
 if __name__ == '__main__':
