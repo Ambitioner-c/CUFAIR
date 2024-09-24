@@ -49,50 +49,59 @@ class OurProcessor(DataProcessor, ABC):
     def create_examples(self, filepath: str) -> pd.DataFrame:
         q_ids: [str] = []
         q_names: [str] = []
+        q_dates: [str] = []
         q_titles: [str] = []
         q_bodys: [str] = []
         a_ids: [list] = []
+        a_dates: [list] = []
         a_bodys: [list] = []
         a_accepteds: [list] = []
         a_scores: [list] = []
         a_participants: [list] = []
         a_pings: [list] = []
-        c_bodys: [[list]] = []
         c_scores: [[list]] = []
+        c_dates: [[list]] = []
+        c_bodys: [[list]] = []
         for _, elem in tqdm(self.iterparse(filepath, self.limit), desc=f'Parsing {coloring(filepath, "red")} XML file'):
             # Question
             question = elem.find('Question')
             q_ids.append(question.attrib['ID'])
             q_names.append(question.attrib['OWNER_DISPLAY_NAME'])
+            q_dates.append(question.attrib['CREATION_DATE'])
             q_titles.append(question.find('QTitle').text)
             q_bodys.append(question.find('QBody').text)
 
             # Answers
             if len(a_ids) <= _:
                 a_ids.append([])
+                a_dates.append([])
                 a_bodys.append([])
                 a_accepteds.append([])
                 a_scores.append([])
                 a_participants.append([])
                 a_pings.append([])
-                c_bodys.append([])
                 c_scores.append([])
+                c_dates.append([])
+                c_bodys.append([])
             answers = elem.findall('Answer')
             for __, answer in enumerate(answers):
                 a_ids[_].append(answer.attrib['ID'])
+                a_dates[_].append(answer.attrib['CREATION_DATE'])
                 a_bodys[_].append(answer.find('ABody').text)
                 a_accepteds[_].append(answer.attrib['ACCEPTED_ANSWER'])
                 a_scores[_].append(answer.attrib['SCORE'])
 
                 # Comments
                 if len(c_bodys[_]) <= __:
-                    c_bodys[_].append([])
                     c_scores[_].append([])
+                    c_dates[_].append([])
+                    c_bodys[_].append([])
                 if int(answer.attrib['COMMENT_COUNT']):
                     comments = answer.find('AComment').findall('Comment')
                     for ___, comment in enumerate(comments):
-                        c_bodys[_][__].append(comment.find('CBody').text)
                         c_scores[_][__].append(comment.attrib['SCORE'])
+                        c_dates[_][__].append(comment.attrib['CREATION_DATE'])
+                        c_bodys[_][__].append(comment.find('CBody').text)
 
                     participants, pings, comments, scores = self.ping_match.main(answer)
                     a_participants[_].append(participants)
@@ -104,16 +113,19 @@ class OurProcessor(DataProcessor, ABC):
         df = pd.DataFrame({
             'QID': q_ids,
             'QName': q_names,
+            'QDate': q_dates,
             'QTitle': q_titles,
             'QBody': q_bodys,
             'AID': a_ids,
+            'ADate': a_dates,
             'ABody': a_bodys,
             'AAccepted': a_accepteds,
             'AScore': a_scores,
             'AParticipants': a_participants,
             'APings': a_pings,
+            'CScore': c_scores,
+            'CDate': c_dates,
             'CBody': c_bodys,
-            'CScore': c_scores
         })
         return df
 
@@ -147,13 +159,16 @@ def main():
     limit = 0
 
     processor = OurProcessor(data_name, limit)
-    df = processor.get_all_examples(data_dir)
+    # df = processor.get_all_examples(data_dir)
     # example = df.head(1)
     # example = example.to_dict(orient='dict')
     # pprint(example)
-    print(df.shape)
+    # print(df.shape)
 
     df = processor.get_train_examples(data_dir)
+    example = df.head(1)
+    example = example.to_dict(orient='dict')
+    pprint(example)
     print(df.shape)
 
     df = processor.get_dev_examples(data_dir)
