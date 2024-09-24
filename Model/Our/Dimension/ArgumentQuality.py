@@ -8,6 +8,7 @@ from datetime import datetime
 from pprint import pprint
 
 import spacy
+from spellchecker import SpellChecker
 
 
 class ArgumentQuality:
@@ -55,6 +56,17 @@ class ArgumentQuality:
             'day_of_week': 0
         }
 
+        self.accuracy = {
+            'num_capitalization_errors': 0,
+            'ratio_capitalization_errors': 0.0,
+            'num_punctuation_errors': 0,
+            'ratio_punctuation_errors': 0.0,
+            'num_typos': 0,
+            'ratio_typos': 0.0,
+            'num_oov_words': 0,
+            'ratio_oov_words': 0.0
+        }
+
     def get_quality(
             self,
             answer: str,
@@ -72,6 +84,7 @@ class ArgumentQuality:
         self.get_readability(answer)
         self.get_objectivity(answer, comments, q_name, participants, pings)
         self.get_timeliness(q_date, a_date, pre_a_date)
+        self.get_accuracy(answer)
 
     def get_depth(self, answer: str):
         # Number of characters in an answer
@@ -141,21 +154,21 @@ class ArgumentQuality:
 
         # Ratio of nouns, adjectives, comparatives, verbs, adverbs, punctuation, and symbols in an answer
         self.readability = {
-            'ratio_nouns': round(counts['NOUN'] / len(doc), 4),
-            'ratio_adjectives': round(counts['ADJ'] / len(doc), 4),
-            'ratio_comparatives': round(counts['COMP'] / len(doc), 4),
-            'ratio_verbs': round(counts['VERB'] / len(doc), 4),
-            'ratio_adverbs': round(counts['ADV'] / len(doc), 4),
-            'ratio_punctuation': round(counts['PUNCT'] / len(doc), 4),
-            'ratio_symbols': round(counts['SYM'] / len(doc), 4)
+            'ratio_nouns': round(counts['NOUN'] / len(doc) if len(doc) > 0 else 0, 4),
+            'ratio_adjectives': round(counts['ADJ'] / len(doc) if len(doc) > 0 else 0, 4),
+            'ratio_comparatives': round(counts['COMP'] / len(doc) if len(doc) > 0 else 0, 4),
+            'ratio_verbs': round(counts['VERB'] / len(doc) if len(doc) > 0 else 0, 4),
+            'ratio_adverbs': round(counts['ADV'] / len(doc) if len(doc) > 0 else 0, 4),
+            'ratio_punctuation': round(counts['PUNCT'] / len(doc) if len(doc) > 0 else 0, 4),
+            'ratio_symbols': round(counts['SYM'] / len(doc) if len(doc) > 0 else 0, 4)
         }
 
         # Characters to sentences ratio in an answer
-        ratio_characters_sentences = round(self.depth['num_characters'] / self.depth['num_sentences'], 4)
+        ratio_characters_sentences = round(self.depth['num_characters'] / self.depth['num_sentences'] if self.depth['num_sentences'] > 0 else 0, 4)
         self.readability['ratio_characters_sentences'] = ratio_characters_sentences
 
         # Words to sentences ratio in an answer
-        ratio_words_sentences = round(self.depth['num_words'] / self.depth['num_sentences'], 4)
+        ratio_words_sentences = round(self.depth['num_words'] / self.depth['num_sentences'] if self.depth['num_sentences'] > 0 else 0, 4)
         self.readability['ratio_words_sentences'] = ratio_words_sentences
 
         # Number of “wh”-type words in an answer
@@ -293,8 +306,72 @@ class ArgumentQuality:
             'day_of_week': day_of_week
         }
 
-    def get_accuracy(self):
-        pass
+    def get_accuracy(self, answer: str):
+        # Number and ratio of capitalization errors in an answer
+        errors = 0
+
+        def replace_link(_text):
+            for old in re.findall(r'(\[.+?]\(.+?\))', _text):
+                _text = _text.replace(old, re.findall(r'(\[.+?])\(.+?\)', _text)[0])
+            return _text
+
+        def replace_code(_text):
+            _text = re.sub(r'```.+?```', '', _text)
+            return _text
+
+        words = replace_code(replace_link(answer)).split()
+
+        pre_end = True
+        for word in words:
+            if 'I' in word:
+                pre_end = False
+                continue
+            if word.startswith(('"', '[', '(')):
+                word.replace('"', '').replace('[', '').replace('(', '')
+                pre_end = True
+            if pre_end:
+                if word[0].islower():
+                    errors += 1
+                pre_end = False
+            else:
+                if not word[0].islower():
+                    errors += 1
+
+                if word.endswith(('.', '?', '!',)):
+                    pre_end = True
+                else:
+                    pre_end = False
+        num_capitalization_errors = errors
+        ratio_capitalization_errors = round(errors / len(words) if len(words) > 0 else 0, 4)
+
+        # Number and ratio of punctuation errors in an answer
+        sentences = re.split(r'(?<=[.!?`)]) +', answer)
+        errors = sum(1 for sentence in sentences if re.search(r"[。，；：！？（）【】{}‘“]", sentence))
+        num_punctuation_errors = errors
+        ratio_punctuation_errors = round(errors / len(sentences) if len(sentences) > 0 else 0, 4)
+
+        # Number and ratio of typos in an answer
+        doc = self.nlp(answer)
+        spell = SpellChecker()
+        errors = sum(1 for token in doc if token.is_alpha and token.text not in spell)
+        num_typos = errors
+        ratio_typos = round(errors / len(words) if len(words) > 0 else 0, 4)
+
+        # Number and ratio of out-of-vocabulary words in an answer
+        errors = sum(1 for token in doc if token.is_alpha and not token.is_oov)
+        num_oov_words = errors
+        ratio_oov_words = round(errors / len(words) if len(words) > 0 else 0, 4)
+
+        self.accuracy = {
+            'num_capitalization_errors': num_capitalization_errors,
+            'ratio_capitalization_errors': ratio_capitalization_errors,
+            'num_punctuation_errors': num_punctuation_errors,
+            'ratio_punctuation_errors': ratio_punctuation_errors,
+            'num_typos': num_typos,
+            'ratio_typos': ratio_typos,
+            'num_oov_words': num_oov_words,
+            'ratio_oov_words': ratio_oov_words
+        }
 
     def get_structure(self):
         pass
@@ -311,7 +388,7 @@ def main():
     spacy_path = "/data/cuifulai/Spacy/en_core_web_sm-3.7.1/en_core_web_sm/en_core_web_sm-3.7.1"
     nlp = spacy.load(spacy_path)
 
-    answer = "$ So good. What is your name? Why. Beautiful. I saw &quot;John Smith&quot; yesterday. &quot;Really?&quot; he asked! ```Python``` [Google](https://www.google.com) ```Programming``` [Baidu](http://www.baidu.com)"
+    answer = "So goed, njbaj. What is your name? Why, I don know. Beeutiful girl. I saw &quot;John Smith&quot; yesterday. &quot;Really?&quot; he asked! ```Python``` [Google](https://www.google.com) ```Programming``` [Baidu](http://www.baidu.com)"
     comments = [
         "Thank you for your answer, thx.",
         "Good answer.",
@@ -345,6 +422,7 @@ def main():
     pprint(argument_quality.readability)
     pprint(argument_quality.objectivity)
     pprint(argument_quality.timeliness)
+    pprint(argument_quality.accuracy)
 
 
 if __name__ == '__main__':
