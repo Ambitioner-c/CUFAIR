@@ -559,20 +559,13 @@ def fact():
         example = df.iloc[idx: idx + 1]
         example = example.to_dict(orient='dict')
 
-        q_id = example['QID'][idx]
         q_name = example['QName'][idx]
         q_date = example['QDate'][idx]
-        q_title = example['QTitle'][idx]
-        q_body = example['QBody'][idx]
         a_ids = example['AID'][idx]
         a_dates = example['ADate'][idx]
         a_bodys = example['ABody'][idx]
-        a_accepteds = example['AAccepted'][idx]
-        a_scores = example['AScore'][idx]
         a_participants = example['AParticipants'][idx]
         a_pings = example['APings'][idx]
-        c_scores = example['CScore'][idx]
-        c_dates = example['CDate'][idx]
         c_bodys = example['CBody'][idx]
 
         argument_quality.get_quality(
