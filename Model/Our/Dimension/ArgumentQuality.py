@@ -4,6 +4,7 @@
 import re
 import html
 from collections import Counter
+from datetime import datetime
 from pprint import pprint
 
 import spacy
@@ -47,19 +48,30 @@ class ArgumentQuality:
             'ratio_positive_negative_words_answer': 0.0
         }
 
+        self.timeliness = {
+            'time_lapse_a_q': 0.0,
+            'time_lapse_a_pre_a': 0.0,
+            'hour_of_day': 0,
+            'day_of_week': 0
+        }
+
     def get_quality(
             self,
             answer: str,
             comments: list[str],
             q_name: str,
             participants: list[str],
-            pings: list[int]
+            pings: list[int],
+            q_date: str,
+            a_date: str,
+            pre_a_date: str
     ):
         answer = self.unescape_html(answer)
 
         self.get_depth(answer)
         self.get_readability(answer)
         self.get_objectivity(answer, comments, q_name, participants, pings)
+        self.get_timeliness(q_date, a_date, pre_a_date)
 
     def get_depth(self, answer: str):
         # Number of characters in an answer
@@ -259,8 +271,27 @@ class ArgumentQuality:
             'ratio_positive_negative_words_answer': ratio_positive_negative_words_answer
         }
 
-    def get_timeliness(self):
-        pass
+    def get_timeliness(self, q_date: str, a_date: str, pre_a_date: str):
+        q_data = datetime.strptime(q_date, "%Y-%m-%dT%H:%M:%S.%f")
+        a_date = datetime.strptime(a_date, "%Y-%m-%dT%H:%M:%S.%f")
+        pre_a_date = datetime.strptime(pre_a_date, "%Y-%m-%dT%H:%M:%S.%f")
+
+        # Time-lapse between a question and an answer
+        time_lapse_a_q = (a_date - q_data).total_seconds() / 60
+
+        # Time-lapse between an answer and the previous answer
+        time_lapse_a_pre_a = (a_date - pre_a_date).total_seconds() / 60
+
+        # Answer’s time as hour of day and day of week
+        hour_of_day = a_date.hour
+        day_of_week = a_date.weekday()
+
+        self.timeliness = {
+            'time_lapse_a_q': time_lapse_a_q,
+            'time_lapse_a_pre_a': time_lapse_a_pre_a,
+            'hour_of_day': hour_of_day,
+            'day_of_week': day_of_week
+        }
 
     def get_accuracy(self):
         pass
@@ -304,12 +335,16 @@ def main():
         2,
         0
     ]
+    q_date = '2016-07-28T09:15:01.607'
+    a_date = '2016-07-29T10:30:01.607'
+    pre_a_date = '2016-07-29T10:15:01.607'
 
     argument_quality = ArgumentQuality(nlp)
-    argument_quality.get_quality(answer, comments, q_name, participants, pings)
+    argument_quality.get_quality(answer, comments, q_name, participants, pings, q_date, a_date, pre_a_date)
     pprint(argument_quality.depth)
     pprint(argument_quality.readability)
     pprint(argument_quality.objectivity)
+    pprint(argument_quality.timeliness)
 
 
 if __name__ == '__main__':
