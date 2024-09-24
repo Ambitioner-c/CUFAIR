@@ -67,16 +67,31 @@ class ArgumentQuality:
             'ratio_oov_words': 0.0
         }
 
+        self.structure = {
+            'position': 0.0,
+            'position_from_top': 0,
+            'position_from_bottom': 0,
+            'num_pinging_answerer': 0,
+            'num_pinging_user': 0,
+            'if_appear_multiple': 0,
+            'if_pinging_answerer': 0,
+            'if_pinging_user': 0,
+            'if_first_response': 0,
+            'if_second_response': 0
+        }
+
     def get_quality(
             self,
-            answer: str,
-            comments: list[str],
             q_name: str,
+            q_date: str,
+            a_id: str,
+            a_date: str,
+            answer: str,
+            pre_a_date: str,
+            a_ids: list[str],
+            comments: list[str],
             participants: list[str],
             pings: list[int],
-            q_date: str,
-            a_date: str,
-            pre_a_date: str
     ):
         answer = self.unescape_html(answer)
 
@@ -85,6 +100,7 @@ class ArgumentQuality:
         self.get_objectivity(answer, comments, q_name, participants, pings)
         self.get_timeliness(q_date, a_date, pre_a_date)
         self.get_accuracy(answer)
+        self.get_structure(q_name, a_id, a_ids, participants, pings)
 
     def get_depth(self, answer: str):
         # Number of characters in an answer
@@ -373,8 +389,59 @@ class ArgumentQuality:
             'ratio_oov_words': ratio_oov_words
         }
 
-    def get_structure(self):
-        pass
+    def get_structure(self, q_name: str, a_id: str, a_ids: list[str], participants: list[str], pings: list[int]):
+        # An answer’s position metrics in term of answer order in a question-thread
+        position = round((a_ids.index(a_id) + 1) / (len(a_ids) - a_ids.index(a_id)), 4)
+
+        # An answer’s position metrics in terms of answer order from top or bottom in a question-thread
+        position_from_top = a_ids.index(a_id) + 1
+        position_from_bottom = len(a_ids) - a_ids.index(a_id)
+
+        # Number of “pinging” to the answerer’s comments in an answer-thread
+        num_pinging_answerer = 0
+        a_name = participants[0]
+        for idx, participant in enumerate(participants):
+            if idx == 0:
+                continue
+            if participant == a_name:
+                num_pinging_answerer += pings.count(idx)
+
+        # Number of “pinging” to the community users’ comments in an answer-thread
+        num_pinging_user = 0
+        a_name = participants[0]
+        for idx, participant in enumerate(participants):
+            if idx == 0:
+                continue
+            if participant != a_name:
+                num_pinging_user += pings.count(idx)
+
+        # If the answerer or community users appear multiple times in an answer-thread
+        if_appear_multiple = 1 if participants.count(q_name) > 1 or participants.count(a_name) > 1 else 0
+
+        # If the community users “pinging” the answerer in an answer-thread
+        if_pinging_answerer = 1 if num_pinging_answerer > 0 else 0
+
+        # If the community users “pinging” the other community users in an answer-thread
+        if_pinging_user = 1 if num_pinging_user > 0 else 0
+
+        # If the answer is the first response to the question in a question-thread
+        if_first_response = 1 if a_ids.index(a_id) == 0 else 0
+
+        # If the answer is the second response to the question in a question-thread
+        if_second_response = 1 if a_ids.index(a_id) == 1 else 0
+
+        self.structure = {
+            'position': position,
+            'position_from_top': position_from_top,
+            'position_from_bottom': position_from_bottom,
+            'num_pinging_answerer': num_pinging_answerer,
+            'num_pinging_user': num_pinging_user,
+            'if_appear_multiple': if_appear_multiple,
+            'if_pinging_answerer': if_pinging_answerer,
+            'if_pinging_user': if_pinging_user,
+            'if_first_response': if_first_response,
+            'if_second_response': if_second_response
+        }
 
     def get_relevancy(self):
         pass
@@ -402,7 +469,7 @@ def main():
         'Charlie',
         'Alice',
         'Alice',
-        'Tom',
+        'Bob',
         'Jerry'
     ]
     pings = [
@@ -410,19 +477,28 @@ def main():
         0,
         1,
         2,
-        0
+        4
     ]
     q_date = '2016-07-28T09:15:01.607'
     a_date = '2016-07-29T10:30:01.607'
     pre_a_date = '2016-07-29T10:15:01.607'
+    a_id = '123'
+    a_ids = [
+        '456',
+        '123',
+        '789',
+        '101',
+        '112'
+    ]
 
     argument_quality = ArgumentQuality(nlp)
-    argument_quality.get_quality(answer, comments, q_name, participants, pings, q_date, a_date, pre_a_date)
+    argument_quality.get_quality(q_name, q_date, a_id, a_date, answer, pre_a_date, a_ids, comments, participants, pings)
     pprint(argument_quality.depth)
     pprint(argument_quality.readability)
     pprint(argument_quality.objectivity)
     pprint(argument_quality.timeliness)
     pprint(argument_quality.accuracy)
+    pprint(argument_quality.structure)
 
 
 if __name__ == '__main__':
