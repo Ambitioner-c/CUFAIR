@@ -6,9 +6,13 @@ import html
 from collections import Counter
 from datetime import datetime
 from pprint import pprint
+from typing import Optional
 
 import spacy
 from spellchecker import SpellChecker
+from transformers import set_seed
+
+from DataLoader.DataProcessor import OurProcessor
 
 
 class ArgumentQuality:
@@ -80,6 +84,29 @@ class ArgumentQuality:
             'if_second_response': 0
         }
 
+    def get_features(self):
+        depth_features = [float(value) for key, value in self.depth.items()]
+        readability_features = [float(value) for key, value in self.readability.items()]
+        objectivity_features = [float(value) for key, value in self.objectivity.items()]
+        timeliness_features = [float(value) for key, value in self.timeliness.items()]
+        accuracy_features = [float(value) for key, value in self.accuracy.items()]
+        structure_features = [float(value) for key, value in self.structure.items()]
+
+        return depth_features + readability_features + objectivity_features + timeliness_features + accuracy_features + structure_features
+
+    def get_features_name(self):
+        depth_features_name = [key for key, value in self.depth.items()]
+        readability_features_name = [key for key, value in self.readability.items()]
+        objectivity_features_name = [key for key, value in self.objectivity.items()]
+        timeliness_features_name = [key for key, value in self.timeliness.items()]
+        accuracy_features_name = [key for key, value in self.accuracy.items()]
+        structure_features_name = [key for key, value in self.structure.items()]
+
+        return depth_features_name + readability_features_name + objectivity_features_name + timeliness_features_name + accuracy_features_name + structure_features_name
+
+    def get_features_length(self):
+        return len(self.get_features())
+
     def get_quality(
             self,
             q_name: str,
@@ -87,7 +114,7 @@ class ArgumentQuality:
             a_id: str,
             a_date: str,
             answer: str,
-            pre_a_date: str,
+            pre_a_date: Optional[str],
             a_ids: list[str],
             comments: list[str],
             participants: list[str],
@@ -196,7 +223,10 @@ class ArgumentQuality:
         self.readability['num_question_marks'] = num_question_marks
 
     def get_objectivity(self, answer: str, comments: list[str], q_name: str, participants: list[str], pings: list[int]):
-        a_name = participants[0]
+        try:
+            a_name = participants[0]
+        except IndexError:
+            a_name = 'Fulai Cui'
 
         # Number of “thank” words of the question asker or community users to the answerer in an answer-thread
         content = ''
@@ -300,10 +330,13 @@ class ArgumentQuality:
             'ratio_positive_negative_words_answer': ratio_positive_negative_words_answer
         }
 
-    def get_timeliness(self, q_date: str, a_date: str, pre_a_date: str):
+    def get_timeliness(self, q_date: str, a_date: str, pre_a_date: Optional[str]):
         q_data = datetime.strptime(q_date, "%Y-%m-%dT%H:%M:%S.%f")
         a_date = datetime.strptime(a_date, "%Y-%m-%dT%H:%M:%S.%f")
-        pre_a_date = datetime.strptime(pre_a_date, "%Y-%m-%dT%H:%M:%S.%f")
+        if pre_a_date:
+            pre_a_date = datetime.strptime(pre_a_date, "%Y-%m-%dT%H:%M:%S.%f")
+        else:
+            pre_a_date = a_date
 
         # Time-lapse between a question and an answer
         time_lapse_a_q = (a_date - q_data).total_seconds() / 60
@@ -399,7 +432,10 @@ class ArgumentQuality:
 
         # Number of “pinging” to the answerer’s comments in an answer-thread
         num_pinging_answerer = 0
-        a_name = participants[0]
+        try:
+            a_name = participants[0]
+        except IndexError:
+            a_name = 'Fulai Cui'
         for idx, participant in enumerate(participants):
             if idx == 0:
                 continue
@@ -408,7 +444,10 @@ class ArgumentQuality:
 
         # Number of “pinging” to the community users’ comments in an answer-thread
         num_pinging_user = 0
-        a_name = participants[0]
+        try:
+            a_name = participants[0]
+        except IndexError:
+            a_name = 'Fulai Cui'
         for idx, participant in enumerate(participants):
             if idx == 0:
                 continue
@@ -444,6 +483,7 @@ class ArgumentQuality:
         }
 
     def get_relevancy(self):
+        # TODO: self.get_features_length() is 44
         pass
 
     @staticmethod
@@ -501,5 +541,56 @@ def main():
     pprint(argument_quality.structure)
 
 
+def fact():
+    set_seed(2024)
+
+    data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
+    data_name = 'meta.stackoverflow.com'
+    limit = 0
+
+    spacy_path = "/data/cuifulai/Spacy/en_core_web_sm-3.7.1/en_core_web_sm/en_core_web_sm-3.7.1"
+    nlp = spacy.load(spacy_path)
+
+    argument_quality = ArgumentQuality(nlp)
+
+    processor = OurProcessor(data_name, limit)
+    df = processor.get_train_examples(data_dir)
+    for idx in range(df.shape[0]):
+        example = df.iloc[idx: idx + 1]
+        example = example.to_dict(orient='dict')
+
+        q_id = example['QID'][idx]
+        q_name = example['QName'][idx]
+        q_date = example['QDate'][idx]
+        q_title = example['QTitle'][idx]
+        q_body = example['QBody'][idx]
+        a_ids = example['AID'][idx]
+        a_dates = example['ADate'][idx]
+        a_bodys = example['ABody'][idx]
+        a_accepteds = example['AAccepted'][idx]
+        a_scores = example['AScore'][idx]
+        a_participants = example['AParticipants'][idx]
+        a_pings = example['APings'][idx]
+        c_scores = example['CScore'][idx]
+        c_dates = example['CDate'][idx]
+        c_bodys = example['CBody'][idx]
+
+        argument_quality.get_quality(
+            q_name=q_name,
+            q_date=q_date,
+            a_id=a_ids[0],
+            a_date=a_dates[0],
+            answer=a_bodys[0],
+            pre_a_date=None,
+            a_ids=a_ids,
+            comments=c_bodys[0],
+            participants=a_participants[0],
+            pings=a_pings[0]
+        )
+        print(argument_quality.get_features())
+        print(argument_quality.get_features_length())
+        exit()
+
+
 if __name__ == '__main__':
-    main()
+    fact()
