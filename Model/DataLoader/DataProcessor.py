@@ -2,10 +2,12 @@
 # @Author: Fulai Cui (cuifulai@mail.hfut.edu.cn)
 # @Time: 2024/9/9 19:36
 import os
+import typing
 from abc import ABC
 import xml.etree.ElementTree as ElementTree
 from pprint import pprint
 
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from transformers import (
@@ -21,14 +23,26 @@ from Unit.cprint import coloring
 class OurProcessor(DataProcessor, ABC):
     def __init__(
             self,
-            data_name: str='meta.stackoverflow.com',
-            limit: int=0
+            data_name: str = 'meta.stackoverflow.com',
+            stage: str = 'train',
+            task: str = 'ranking',
+            filtered: bool = False,
+            threshold: int = 1,
+            normalize: bool = True,
+            return_classes: bool = False,
+            limit: int = 0
     ):
         super(OurProcessor).__init__()
 
         self.ping_match = PingMatch()
 
         self.data_name = data_name
+        self.stage = stage
+        self.task = task
+        self.filtered = filtered
+        self.threshold = threshold
+        self.normalize = normalize
+        self.return_classes = return_classes
         self.limit = limit
 
     def get_all_examples(self, data_dir: str) -> pd.DataFrame:
@@ -47,87 +61,169 @@ class OurProcessor(DataProcessor, ABC):
         pass
 
     def create_examples(self, filepath: str) -> pd.DataFrame:
-        q_ids: [str] = []
-        q_names: [str] = []
-        q_dates: [str] = []
-        q_titles: [str] = []
-        q_bodys: [str] = []
-        a_ids: [list] = []
-        a_dates: [list] = []
-        a_bodys: [list] = []
-        a_accepteds: [list] = []
-        a_scores: [list] = []
-        a_participants: [list] = []
-        a_pings: [list] = []
-        c_scores: [[list]] = []
-        c_dates: [[list]] = []
-        c_bodys: [[list]] = []
+        text_lefts: list = []
+        text_rights: list = []
+        labels: list = []
+        text_others: [list] = []
+        extends: list[dict] = []
+
         for _, elem in tqdm(self.iterparse(filepath, self.limit), desc=f'Parsing {coloring(filepath, "red")} XML file'):
+            temp_text_lefts = []
+            temp_text_rights = []
+            temp_labels = []
+            temp_comments = []
+
             # Question
             question = elem.find('Question')
-            q_ids.append(question.attrib['ID'])
-            q_names.append(question.attrib['OWNER_DISPLAY_NAME'])
-            q_dates.append(question.attrib['CREATION_DATE'])
-            q_titles.append(question.find('QTitle').text)
-            q_bodys.append(question.find('QBody').text)
+            q_id: str = question.attrib['ID']
+            q_name: str = question.attrib['OWNER_DISPLAY_NAME']
+            q_date: str = question.attrib['CREATION_DATE']
+            q_title: str = question.find('QTitle').text
+            q_body: str = question.find('QBody').text
+
+            a_ids: list = []
+            a_dates: list = []
+            a_accepteds: list = []
+            a_scores: list = []
+            a_bodys: list = []
+            a_participants: [list] = []
+            a_pings: [list] = []
+            c_dates: [list] = []
+            c_scores: [list] = []
+            c_bodys: [list] = []
 
             # Answers
-            if len(a_ids) <= _:
-                a_ids.append([])
-                a_dates.append([])
-                a_bodys.append([])
-                a_accepteds.append([])
-                a_scores.append([])
-                a_participants.append([])
-                a_pings.append([])
-                c_scores.append([])
-                c_dates.append([])
-                c_bodys.append([])
             answers = elem.findall('Answer')
             for __, answer in enumerate(answers):
-                a_ids[_].append(answer.attrib['ID'])
-                a_dates[_].append(answer.attrib['CREATION_DATE'])
-                a_bodys[_].append(answer.find('ABody').text)
-                a_accepteds[_].append(answer.attrib['ACCEPTED_ANSWER'])
-                a_scores[_].append(answer.attrib['SCORE'])
+                a_id = answer.attrib['ID']
+                a_date = answer.attrib['CREATION_DATE']
+                a_accepted = answer.attrib['ACCEPTED_ANSWER']
+                a_score = answer.attrib['SCORE']
+                a_body = answer.find('ABody').text
+                a_ids.append(a_id)
+                a_dates.append(a_date)
+                a_accepteds.append(a_accepted)
+                a_scores.append(a_score)
+                a_bodys.append(a_body)
 
                 # Comments
-                if len(c_bodys[_]) <= __:
-                    c_scores[_].append([])
-                    c_dates[_].append([])
-                    c_bodys[_].append([])
+                if len(c_bodys) <= __:
+                    a_participants.append([])
+                    a_pings.append([])
+                    c_dates.append([])
+                    c_scores.append([])
+                    c_bodys.append([])
                 if int(answer.attrib['COMMENT_COUNT']):
                     comments = answer.find('AComment').findall('Comment')
                     for ___, comment in enumerate(comments):
-                        c_scores[_][__].append(comment.attrib['SCORE'])
-                        c_dates[_][__].append(comment.attrib['CREATION_DATE'])
-                        c_bodys[_][__].append(comment.find('CBody').text)
+                        c_date = comment.attrib['CREATION_DATE']
+                        c_score = comment.attrib['SCORE']
+                        c_body = comment.find('CBody').text
+                        c_scores[__].append(c_score)
+                        c_dates[__].append(c_date)
+                        c_bodys[__].append(c_body)
 
                     participants, pings, comments, scores = self.ping_match.main(answer)
-                    a_participants[_].append(participants)
-                    a_pings[_].append(pings)
-                else:
-                    a_participants[_].append([])
-                    a_pings[_].append([])
+                    a_participants.append(participants)
+                    a_pings.append(pings)
+
+                temp_text_lefts.append(q_body)
+                temp_text_rights.append(a_bodys[__])
+                temp_labels.append(a_scores[__])
+                temp_comments.append(c_bodys[__])
+
+            assert len(temp_text_lefts) == len(temp_text_rights) == len(temp_labels) == len(temp_comments)
+            if len(temp_labels) < self.threshold:
+                continue
+
+            if self.filtered and self.stage in ('dev', 'test'):
+                if all([int(label) <= 0 for label in temp_labels]):
+                    continue
+
+            if self.normalize:
+                temp_labels = [float(label) for label in temp_labels]
+                min_label = min(temp_labels)
+                max_label = max(temp_labels)
+                temp_labels = [round((label - min_label) / (max_label - min_label), 2) for label in temp_labels]
+
+            extend = {
+                'QID': q_id,
+                'QName': q_name,
+                'QDate': q_date,
+                'QTitle': q_title,
+                'QBody': q_body,
+                'AIDs': a_ids,
+                'ADates': a_dates,
+                'ABodys': a_bodys,
+                'AAccepteds': a_accepteds,
+                'AScores': a_scores,
+                'AParticipants': a_participants,
+                'APings': a_pings,
+                'CScores': c_scores,
+                'CDates': c_dates,
+                'CBody': c_bodys,
+            }
+            temp_extends = [extend] * len(temp_labels)
+
+            text_lefts.extend(temp_text_lefts)
+            text_rights.extend(temp_text_rights)
+            labels.extend(temp_labels)
+            text_others.extend(temp_comments)
+            extends.extend(temp_extends)
 
         df = pd.DataFrame({
-            'QID': q_ids,
-            'QName': q_names,
-            'QDate': q_dates,
-            'QTitle': q_titles,
-            'QBody': q_bodys,
-            'AID': a_ids,
-            'ADate': a_dates,
-            'ABody': a_bodys,
-            'AAccepted': a_accepteds,
-            'AScore': a_scores,
-            'AParticipants': a_participants,
-            'APings': a_pings,
-            'CScore': c_scores,
-            'CDate': c_dates,
-            'CBody': c_bodys,
+            'text_left': text_lefts,
+            'text_right': text_rights,
+            'label': labels,
+            'comment': text_others,
+            'extend': extends
         })
+
+        self.pack(df)
+        exit()
+
+    def pack(self, df: pd.DataFrame):
+        # Gather IDs
+        id_left = self.gen_ids(df, 'text_left', 'L-')
+        id_right = self.gen_ids(df, 'text_right', 'R-')
+
+        # Build Relation
+        relation = pd.DataFrame(data={'id_left': id_left, 'id_right': id_right})
+        relation['label'] = df['label']
+        if self.task == 'classification':
+            relation['label'] = relation['label'].astype(int)
+        elif self.task == 'ranking':
+            relation['label'] = relation['label'].astype(float)
+        else:
+            raise ValueError(f"{self.task} is not a valid task.")
+
+        # Build Left and Right
+        left = self.merge(df, id_left, 'text_left', 'id_left')
+        right = self.merge(df, id_right, 'text_right', 'id_right')
+        comment = self.merge(df, id_right, 'comment', 'id_right')
+        extend = self.merge(df, id_left, 'extend', 'id_left')
+
+        print(relation.head())
+        print(left.head())
+        print(right.head())
+        print(comment.head())
+        print(extend.head())
+
+    @staticmethod
+    def merge(data: pd.DataFrame, ids: typing.Union[list, np.array], text_label: str, id_label: str):
+        df = pd.DataFrame(data={
+            text_label: data[text_label], id_label: ids
+        })
+        df.drop_duplicates(id_label, inplace=True)
+        df.set_index(id_label, inplace=True)
         return df
+
+    @staticmethod
+    def gen_ids(data: pd.DataFrame, col: str, prefix: str):
+        lookup = {}
+        for text in data[col].unique():
+            lookup[text] = prefix + str(len(lookup))
+        return data[col].map(lookup)
 
     @staticmethod
     def iterparse(filepath: str, limit: int) -> (int, ElementTree.Element):
@@ -156,25 +252,20 @@ def main():
 
     data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
     data_name = 'meta.stackoverflow.com'
-    limit = 0
 
-    processor = OurProcessor(data_name, limit)
-    # df = processor.get_all_examples(data_dir)
-    # example = df.head(1)
-    # example = example.to_dict(orient='dict')
-    # pprint(example)
-    # print(df.shape)
-
-    df = processor.get_train_examples(data_dir)
+    df = OurProcessor(
+        data_name=data_name,
+        stage='train',
+        task='ranking',
+        filtered=False,
+        threshold=5,
+        normalize=True,
+        return_classes=False,
+        limit=0
+    ).get_train_examples(data_dir)
     example = df.head(1)
     example = example.to_dict(orient='dict')
     pprint(example)
-    print(df.shape)
-
-    df = processor.get_dev_examples(data_dir)
-    print(df.shape)
-
-    df = processor.get_test_examples(data_dir)
     print(df.shape)
 
 
