@@ -58,7 +58,7 @@ class DataPack:
 
         x = frame[columns].to_dict(orient='list')
         for key, val in x.items():
-            x[key] = np.vstack(val)
+            x[key] = np.array(val)
 
         return x, y
 
