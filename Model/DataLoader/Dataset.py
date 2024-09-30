@@ -1,57 +1,238 @@
 # coding=utf-8
 # @Author: Fulai Cui (cuifulai@mail.hfut.edu.cn)
 # @Time: 2024/9/9 19:36
+import typing
 from typing import Optional
 
+import math
+import numpy as np
 import pandas as pd
-from torch import Tensor
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer, set_seed, AutoTokenizer
 
+from DataLoader.DataPack import DataPack
 from DataLoader.DataProcessor import OurProcessor
+
+from warnings import simplefilter
+simplefilter(action='ignore', category=FutureWarning)
 
 
 class OurDataset(Dataset):
     def __init__(
             self,
             tokenizer: PreTrainedTokenizer,
-            data_dir: str,
-            data_name: str,
-            limit: int = 0,
-            mode: str = 'All',
+            data_pack: DataPack,
+            mode: str = 'pair',
+            num_dup: int = 1,
+            num_neg: int = 1,
+            batch_size: int = 32,
+            resample: bool = False,
+            shuffle: bool = True,
+            sort: bool = False,
             max_length: Optional[int] = None
     ):
-        self.processor = OurProcessor(
-            data_name=data_name,
-            limit=limit
-        )
+        if mode not in ('point', 'pair', 'list'):
+            raise ValueError(f"{mode} is not a valid mode type. Must be one of `point`, `pair` or `list`.")
 
-        self.mode = mode
-        if self.mode == 'All':
-            self.df = self.processor.get_all_examples(data_dir)
-        elif self.mode == 'Train':
-            self.df = self.processor.get_train_examples(data_dir)
-        elif self.mode == 'Dev':
-            self.df = self.processor.get_dev_examples(data_dir)
-        else:
-            self.df = self.processor.get_test_examples(data_dir)
+        if shuffle and sort:
+            raise ValueError(f"parameters `shuffle` and `sort` conflict, should not both be `True`.")
+
+        data_pack = data_pack.copy()
+        self._mode = mode
+        self._num_dup = num_dup
+        self._num_neg = num_neg
+        self._batch_size = batch_size
+        self._resample = (resample if mode != 'point' else False)
+        self._shuffle = shuffle
+        self._sort = sort
+        self._orig_relation = data_pack.relation
+
+        if mode == 'pair':
+            data_pack.relation = self._reorganize_pair_wise(
+                relation=self._orig_relation,
+                num_dup=num_dup,
+                num_neg=num_neg
+            )
+
+        self._data_pack = self.convert_examples_to_features(data_pack, tokenizer, max_length)
+        self._batch_indices = None
+
+        self.reset_index()
 
     @staticmethod
     def convert_examples_to_features(
-            examples: pd.DataFrame,
+            data_pack: DataPack,
             tokenizer: PreTrainedTokenizer,
             max_length: Optional[int] = None,
-    ) -> [Tensor]:
-        if max_length is None:
-            max_length = tokenizer.model_max_length
-
+    ) -> DataPack:
+        # TODO: tokenizer(XXX)['input_ids']
         pass
 
-    def __len__(self):
-        pass
+    def __getitem__(self, item) -> typing.Tuple[dict, np.ndarray]:
+        if isinstance(item, slice):
+            indices = sum(self._batch_indices[item], [])
+        elif isinstance(item, typing.Iterable):
+            indices = [self._batch_indices[i] for i in item]
+        else:
+            indices = self._batch_indices[item]
+        batch_data_pack = self._data_pack[indices]
+        x, y = batch_data_pack.unpack()
+        return x, y
 
-    def __getitem__(self, idx):
-        pass
+    def __len__(self) -> int:
+        return len(self._batch_indices)
+
+    def __iter__(self):
+        if self._resample or self._shuffle:
+            self.on_epoch_end()
+        for i in range(len(self)):
+            yield self[i]
+
+    def on_epoch_end(self):
+        if self._resample:
+            self.resample_data()
+        self.reset_index()
+
+    def resample_data(self):
+        if self.mode != 'point':
+            self._data_pack.relation = self._reorganize_pair_wise(
+                relation=self._orig_relation,
+                num_dup=self._num_dup,
+                num_neg=self._num_neg
+            )
+
+    def reset_index(self):
+        if self._mode == 'point':
+            num_instances = len(self._data_pack)
+            index_pool = list(range(num_instances))
+        elif self._mode == 'pair':
+            index_pool = []
+            step_size = self._num_neg + 1
+            num_instances = int(len(self._data_pack) / step_size)
+            for i in range(num_instances):
+                lower = i * step_size
+                upper = (i + 1) * step_size
+                indices = list(range(lower, upper))
+                if indices:
+                    index_pool.append(indices)
+        elif self._mode == 'list':
+            raise NotImplementedError(
+                f'{self._mode} dataset not implemented.')
+        else:
+            raise ValueError(f"{self._mode} is not a valid mode type"
+                             f"Must be one of `point`, `pair` or `list`.")
+
+        if self._shuffle:
+            np.random.shuffle(index_pool)
+
+        if self._sort:
+            old_index_pool = index_pool
+
+            max_instance_right_length = []
+            for row in range(len(old_index_pool)):
+                instance = self._data_pack[old_index_pool[row]].unpack()[0]
+                max_instance_right_length.append(max(instance['length_right']))
+            sort_index = np.argsort(max_instance_right_length)
+
+            index_pool = [old_index_pool[index] for index in sort_index]
+
+        # batch_indices: index -> batch of indices
+        self._batch_indices = []
+        for i in range(math.ceil(num_instances / self._batch_size)):
+            lower = self._batch_size * i
+            upper = self._batch_size * (i + 1)
+            candidates = index_pool[lower:upper]
+            if self._mode == 'pair':
+                candidates = sum(candidates, [])
+            self._batch_indices.append(candidates)
+
+    @property
+    def num_neg(self):
+        return self._num_neg
+
+    @num_neg.setter
+    def num_neg(self, value):
+        self._num_neg = value
+        self.resample_data()
+        self.reset_index()
+
+    @property
+    def num_dup(self):
+        return self._num_dup
+
+    @num_dup.setter
+    def num_dup(self, value):
+        self._num_dup = value
+        self.resample_data()
+        self.reset_index()
+
+    @property
+    def mode(self):
+        return self._mode
+
+    @property
+    def batch_size(self):
+        return self._batch_size
+
+    @batch_size.setter
+    def batch_size(self, value):
+        self._batch_size = value
+        self.reset_index()
+
+    @property
+    def shuffle(self):
+        return self._shuffle
+
+    @shuffle.setter
+    def shuffle(self, value):
+        self._shuffle = value
+        self.reset_index()
+
+    @property
+    def sort(self):
+        return self._sort
+
+    @sort.setter
+    def sort(self, value):
+        self._sort = value
+        self.reset_index()
+
+    @property
+    def resample(self):
+        return self._resample
+
+    @resample.setter
+    def resample(self, value):
+        self._resample = value
+        self.reset_index()
+
+    @property
+    def batch_indices(self):
+        return self._batch_indices
+
+    @classmethod
+    def _reorganize_pair_wise(
+            cls,
+            relation: pd.DataFrame,
+            num_dup: int = 1,
+            num_neg: int = 1
+    ):
+        pairs = []
+        groups = relation.sort_values(
+            'label', ascending=False).groupby('id_left')
+        for _, group in groups:
+            labels = group.label.unique()
+            for label in labels[:-1]:
+                pos_samples = group[group.label == label]
+                pos_samples = pd.concat([pos_samples] * num_dup)
+                neg_samples = group[group.label < label]
+                for _, pos_sample in pos_samples.iterrows():
+                    pos_sample = pd.DataFrame([pos_sample])
+                    neg_sample = neg_samples.sample(num_neg, replace=True)
+                    pairs.extend((pos_sample, neg_sample))
+        new_relation = pd.concat(pairs, ignore_index=True)
+        return new_relation
+
 
 
 def main():
@@ -63,18 +244,30 @@ def main():
     pretrained_model_path = '/data/cuifulai/PretrainedModel/bert-base-uncased'
     tokenizer = AutoTokenizer.from_pretrained(pretrained_model_path)
 
-    add_dataset = OurDataset(
-        tokenizer=tokenizer,
-        data_dir=data_dir,
+    train_data_pack = OurProcessor(
         data_name=data_name,
-        limit=0,
-        mode='All',
-        max_length=None
+        stage='train',
+        task='ranking',
+        filtered=False,
+        threshold=5,
+        normalize=True,
+        return_classes=False,
+        limit=0
+    ).get_train_examples(data_dir)
+
+    train_dataset = OurDataset(
+        tokenizer=tokenizer,
+        data_pack=train_data_pack,
+        mode='pair',
+        num_dup=2,
+        num_neg=1,
+        batch_size=10,
+        resample=True,
+        shuffle=True,
+        sort=False,
+        max_length=512
     )
-    all_dataloader = DataLoader(dataset=add_dataset, batch_size=32, shuffle=True)
-    for example in all_dataloader:
-        print(example)
-        exit()
+    print(train_dataset[0])
 
 
 if __name__ == '__main__':
