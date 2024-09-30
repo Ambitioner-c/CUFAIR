@@ -6,6 +6,7 @@ import typing
 from abc import ABC
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
+from pprint import pprint
 
 import numpy as np
 import pandas as pd
@@ -108,8 +109,6 @@ class OurProcessor(DataProcessor, ABC):
 
                 # Comments
                 if len(c_bodys) <= __:
-                    a_participants.append([])
-                    a_pings.append([])
                     c_dates.append([])
                     c_scores.append([])
                     c_bodys.append([])
@@ -126,6 +125,9 @@ class OurProcessor(DataProcessor, ABC):
                     participants, pings, comments, scores = self.ping_match.main(answer)
                     a_participants.append(participants)
                     a_pings.append(pings)
+                else:
+                    a_participants.append([])
+                    a_pings.append([])
 
                 temp_text_lefts.append(q_body)
                 temp_text_rights.append(a_bodys[__])
@@ -263,7 +265,7 @@ def main():
         return_classes=False,
         limit=0
     ).get_train_examples(data_dir)
-    print(train_dp.frame())
+    pprint(train_dp.frame().iloc[0].to_dict())
 
     dev_dp = OurProcessor(
         data_name=data_name,
