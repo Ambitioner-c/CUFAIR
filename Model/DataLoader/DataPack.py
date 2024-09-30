@@ -57,8 +57,22 @@ class DataPack:
             y = None
 
         x = frame[columns].to_dict(orient='list')
+
+        max_seq_length = max([len(comment) for comment in x['comment']])
+
         for key, val in x.items():
-            x[key] = np.array(val)
+            if key == 'comment':
+                comments = []
+                for comment in val:
+                    seq_length = len(comment)
+                    if seq_length == 0:
+                        comment = [''] * max_seq_length
+                    else:
+                        comment.extend([''] * (max_seq_length - seq_length))
+                    comments.append(comment)
+                x[key] = np.array(comments)
+            else:
+                x[key] = np.array(val)
 
         return x, y
 
