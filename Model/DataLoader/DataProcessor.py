@@ -5,7 +5,7 @@ import os
 import typing
 from abc import ABC
 import xml.etree.ElementTree as ElementTree
-from pprint import pprint
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -15,7 +15,7 @@ from transformers import (
     set_seed
 )
 
-
+from DataLoader.DataPack import DataPack
 from Model.Baselines.Ablation.StackExchange.DataLoader.DataProcessor import PingMatch
 from Unit.cprint import coloring
 
@@ -45,29 +45,29 @@ class OurProcessor(DataProcessor, ABC):
         self.return_classes = return_classes
         self.limit = limit
 
-    def get_all_examples(self, data_dir: str) -> pd.DataFrame:
-        return self.create_examples(os.path.join(data_dir, self.data_name, self.data_name + '.xml'))
+    def get_all_examples(self, data_dir: str) -> DataPack:
+        return self.create_examples(os.path.join(data_dir, self.data_name, self.data_name))
 
-    def get_train_examples(self, data_dir: str) -> pd.DataFrame:
-        return self.create_examples(os.path.join(data_dir, self.data_name, 'Train', 'train.xml'))
+    def get_train_examples(self, data_dir: str) -> DataPack:
+        return self.create_examples(os.path.join(data_dir, self.data_name, 'Train', 'train'))
 
-    def get_dev_examples(self, data_dir: str) -> pd.DataFrame:
-        return self.create_examples(os.path.join(data_dir, self.data_name, 'Dev', 'dev.xml'))
+    def get_dev_examples(self, data_dir: str) -> DataPack:
+        return self.create_examples(os.path.join(data_dir, self.data_name, 'Dev', 'dev'))
 
-    def get_test_examples(self, data_dir: str) -> pd.DataFrame:
-        return self.create_examples(os.path.join(data_dir, self.data_name, 'Test', 'test.xml'))
+    def get_test_examples(self, data_dir: str) -> DataPack:
+        return self.create_examples(os.path.join(data_dir, self.data_name, 'Test', 'test'))
 
     def get_labels(self):
         pass
 
-    def create_examples(self, filepath: str) -> pd.DataFrame:
+    def create_examples(self, filepath: str) -> DataPack:
         text_lefts: list = []
         text_rights: list = []
         labels: list = []
         text_others: [list] = []
         extends: list[dict] = []
 
-        for _, elem in tqdm(self.iterparse(filepath, self.limit), desc=f'Parsing {coloring(filepath, "red")} XML file'):
+        for _, elem in tqdm(self._iterparse(filepath + '.xml', self.limit), desc=f'Parsing {coloring(filepath, "red")} XML file'):
             temp_text_lefts = []
             temp_text_rights = []
             temp_labels = []
@@ -179,13 +179,16 @@ class OurProcessor(DataProcessor, ABC):
             'extend': extends
         })
 
-        self.pack(df)
-        exit()
+        data_pack = self.pack(df)
+
+        if not Path.exists(Path(filepath + '.csv')):
+            data_pack.frame().to_csv(filepath + '.csv')
+        return data_pack
 
     def pack(self, df: pd.DataFrame):
         # Gather IDs
-        id_left = self.gen_ids(df, 'text_left', 'L-')
-        id_right = self.gen_ids(df, 'text_right', 'R-')
+        id_left = self._gen_ids(df, 'text_left', 'L-')
+        id_right = self._gen_ids(df, 'text_right', 'R-')
 
         # Build Relation
         relation = pd.DataFrame(data={'id_left': id_left, 'id_right': id_right})
@@ -198,19 +201,15 @@ class OurProcessor(DataProcessor, ABC):
             raise ValueError(f"{self.task} is not a valid task.")
 
         # Build Left and Right
-        left = self.merge(df, id_left, 'text_left', 'id_left')
-        right = self.merge(df, id_right, 'text_right', 'id_right')
-        comment = self.merge(df, id_right, 'comment', 'id_right')
-        extend = self.merge(df, id_left, 'extend', 'id_left')
+        left = self._merge(df, id_left, 'text_left', 'id_left')
+        right = self._merge(df, id_right, 'text_right', 'id_right')
+        comment = self._merge(df, id_right, 'comment', 'id_right')
+        extend = self._merge(df, id_left, 'extend', 'id_left')
 
-        print(relation.head())
-        print(left.head())
-        print(right.head())
-        print(comment.head())
-        print(extend.head())
+        return DataPack(relation, left, right, comment, extend)
 
     @staticmethod
-    def merge(data: pd.DataFrame, ids: typing.Union[list, np.array], text_label: str, id_label: str):
+    def _merge(data: pd.DataFrame, ids: typing.Union[list, np.array], text_label: str, id_label: str):
         df = pd.DataFrame(data={
             text_label: data[text_label], id_label: ids
         })
@@ -219,14 +218,14 @@ class OurProcessor(DataProcessor, ABC):
         return df
 
     @staticmethod
-    def gen_ids(data: pd.DataFrame, col: str, prefix: str):
+    def _gen_ids(data: pd.DataFrame, col: str, prefix: str):
         lookup = {}
         for text in data[col].unique():
             lookup[text] = prefix + str(len(lookup))
         return data[col].map(lookup)
 
     @staticmethod
-    def iterparse(filepath: str, limit: int) -> (int, ElementTree.Element):
+    def _iterparse(filepath: str, limit: int) -> (int, ElementTree.Element):
         content = ElementTree.iterparse(filepath, events=('end',))
         _, root = next(content)
 
@@ -247,13 +246,14 @@ class OurProcessor(DataProcessor, ABC):
 
                     idx += 1
 
+
 def main():
     set_seed(2024)
 
     data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
     data_name = 'meta.stackoverflow.com'
 
-    df = OurProcessor(
+    train_dp = OurProcessor(
         data_name=data_name,
         stage='train',
         task='ranking',
@@ -263,10 +263,31 @@ def main():
         return_classes=False,
         limit=0
     ).get_train_examples(data_dir)
-    example = df.head(1)
-    example = example.to_dict(orient='dict')
-    pprint(example)
-    print(df.shape)
+    print(train_dp.frame())
+
+    dev_dp = OurProcessor(
+        data_name=data_name,
+        stage='dev',
+        task='ranking',
+        filtered=True,
+        threshold=5,
+        normalize=True,
+        return_classes=False,
+        limit=0
+    ).get_dev_examples(data_dir)
+    print(dev_dp.frame())
+
+    test_dp = OurProcessor(
+        data_name=data_name,
+        stage='test',
+        task='ranking',
+        filtered=True,
+        threshold=5,
+        normalize=True,
+        return_classes=False,
+        limit=0
+    ).get_test_examples(data_dir)
+    print(test_dp.frame())
 
 
 if __name__ == '__main__':
