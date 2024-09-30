@@ -46,7 +46,7 @@ class DataPack:
     def frame(self) -> 'DataPack.FrameView':
         return DataPack.FrameView(self)
 
-    def unpack(self) -> typing.Union[typing.Dict[str, np.array], typing.Optional[np.array]]:
+    def unpack(self) -> typing.Tuple[typing.Dict[str, np.array], typing.Optional[np.array]]:
         frame = self.frame()
 
         columns = list(frame.columns)
