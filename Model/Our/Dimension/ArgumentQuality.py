@@ -72,7 +72,7 @@ class ArgumentQuality:
 
                 extend_json = extend_df.loc[id_left].extend
 
-                a_id = right_id_df.loc[id_right].text_right_id
+                a_id = right_id_df.loc[id_right].right_id
                 answer = right_df.loc[id_right].text_right
                 a_ids = extend_json['AIDs']
                 idx = a_ids.index(a_id)
