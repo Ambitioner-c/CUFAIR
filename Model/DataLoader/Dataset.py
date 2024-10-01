@@ -12,8 +12,8 @@ import spacy
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer, set_seed, AutoTokenizer
 
-from DataLoader.DataPack import DataPack
-from DataLoader.DataProcessor import OurProcessor
+from DataPack import DataPack
+from DataProcessor import OurProcessor
 
 from warnings import simplefilter
 

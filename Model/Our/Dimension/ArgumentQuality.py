@@ -12,8 +12,8 @@ from spellchecker import SpellChecker
 from tqdm import trange
 from transformers import set_seed
 
-from DataLoader.DataPack import DataPack
-from DataLoader.DataProcessor import OurProcessor
+from Model.DataLoader.DataPack import DataPack
+from Model.DataLoader.DataProcessor import OurProcessor
 
 
 class ArgumentQuality:
