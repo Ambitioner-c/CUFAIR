@@ -63,6 +63,7 @@ class OurProcessor(DataProcessor, ABC):
 
     def create_examples(self, filepath: str) -> DataPack:
         text_lefts: list = []
+        text_right_ids: list = []
         text_rights: list = []
         labels: list = []
         text_others: [list] = []
@@ -70,6 +71,7 @@ class OurProcessor(DataProcessor, ABC):
 
         for _, elem in tqdm(self._iterparse(filepath + '.xml', self.limit), desc=f'Parsing {coloring(filepath, "red")} XML file'):
             temp_text_lefts = []
+            temp_text_right_ids = []
             temp_text_rights = []
             temp_labels = []
             temp_comments = []
@@ -130,11 +132,12 @@ class OurProcessor(DataProcessor, ABC):
                     a_pings.append([])
 
                 temp_text_lefts.append(q_body)
+                temp_text_right_ids.append(a_ids[__])
                 temp_text_rights.append(a_bodys[__])
                 temp_labels.append(a_scores[__])
                 temp_comments.append(c_bodys[__])
 
-            assert len(temp_text_lefts) == len(temp_text_rights) == len(temp_labels) == len(temp_comments)
+            assert len(temp_text_lefts) == len(temp_text_right_ids) == len(temp_text_rights) == len(temp_labels) == len(temp_comments)
             if len(temp_labels) < self.threshold:
                 continue
 
@@ -168,6 +171,7 @@ class OurProcessor(DataProcessor, ABC):
             temp_extends = [extend] * len(temp_labels)
 
             text_lefts.extend(temp_text_lefts)
+            text_right_ids.extend(temp_text_right_ids)
             text_rights.extend(temp_text_rights)
             labels.extend(temp_labels)
             text_others.extend(temp_comments)
@@ -175,6 +179,7 @@ class OurProcessor(DataProcessor, ABC):
 
         df = pd.DataFrame({
             'text_left': text_lefts,
+            'text_right_id': text_right_ids,
             'text_right': text_rights,
             'label': labels,
             'comment': text_others,
@@ -204,11 +209,12 @@ class OurProcessor(DataProcessor, ABC):
 
         # Build Left and Right
         left = self._merge(df, id_left, 'text_left', 'id_left')
+        right_id = self._merge(df, id_right, 'text_right_id', 'id_right')
         right = self._merge(df, id_right, 'text_right', 'id_right')
         comment = self._merge(df, id_right, 'comment', 'id_right')
         extend = self._merge(df, id_left, 'extend', 'id_left')
 
-        return DataPack(relation, left, right, comment, extend)
+        return DataPack(relation, left, right_id, right, comment, extend)
 
     @staticmethod
     def _merge(data: pd.DataFrame, ids: typing.Union[list, np.array], text_label: str, id_label: str):
