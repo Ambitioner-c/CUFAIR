@@ -8,6 +8,9 @@ import numpy as np
 import pandas as pd
 import inspect
 
+import torch
+from torch import Tensor
+
 
 def _convert_to_list_index(
         index: typing.Union[int, slice, np.array],
@@ -62,21 +65,24 @@ class DataPack:
 
         x = frame[columns].to_dict(orient='list')
 
-        max_seq_length = max([len(comment) for comment in x['comment']])
+        max_seq_length = max([len(comment) if comment is not None else 0 for comment in x['comment']])
 
         for key, val in x.items():
             if key == 'comment':
                 comments = []
                 for comment in val:
-                    seq_length = len(comment)
+                    seq_length = len(comment) if comment is not None else 0
                     if seq_length == 0:
-                        comment = [''] * max_seq_length
+                        comment = Tensor([[101, 102]] * max_seq_length)
                     else:
-                        comment.extend([''] * (max_seq_length - seq_length))
+                        padding = comment[0].shape[0]
+                        comment = torch.cat((comment, Tensor([[101, 102] + [0] * (padding - 2)] * (max_seq_length - seq_length))), dim=0)
                     comments.append(comment)
-                x[key] = np.array(comments)
+                x[key] = comments
+            elif key == 'right_id' or key == 'extend':
+                continue
             else:
-                x[key] = np.array(val)
+                x[key] = val
 
         return x, y
 
@@ -114,6 +120,10 @@ class DataPack:
     @property
     def right_id(self) -> pd.DataFrame:
         return self._right_id
+
+    @right_id.setter
+    def right_id(self, value):
+        self._right_id = value
 
     @property
     def right(self) -> pd.DataFrame:
