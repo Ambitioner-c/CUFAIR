@@ -9,7 +9,6 @@ import pandas as pd
 import inspect
 
 import torch
-from torch import Tensor
 
 
 def _convert_to_list_index(
