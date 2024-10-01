@@ -29,6 +29,7 @@ class DataPack:
             right: pd.DataFrame,
             comment: pd.DataFrame,
             extend: pd.DataFrame,
+            feature: pd.DataFrame
     ):
         self._relation = relation
         self._left = left
@@ -36,6 +37,7 @@ class DataPack:
         self._right = right
         self._comment = comment
         self._extend = extend
+        self._feature = feature
 
     @property
     def has_label(self) -> bool:
@@ -86,13 +88,15 @@ class DataPack:
         right = self._right.loc[relation['id_right'].unique()]
         comment = self._comment.loc[relation['id_right'].unique()]
         extend = self._extend.loc[relation['id_left'].unique()]
+        feature = self._feature.loc[relation['id_right'].unique()]
         return DataPack(
             relation=relation.copy(),
             left=left.copy(),
             right_id=right_id.copy(),
             right=right.copy(),
             comment=comment.copy(),
-            extend=extend.copy()
+            extend=extend.copy(),
+            feature=feature.copy()
         )
 
     @property
@@ -127,6 +131,14 @@ class DataPack:
     def extend(self, value):
         self._extend = value
 
+    @property
+    def feature(self) -> pd.DataFrame:
+        return self._feature
+
+    @feature.setter
+    def feature(self, value):
+        self._feature = value
+
     def copy(self) -> 'DataPack':
         return DataPack(
             relation=self._relation.copy(),
@@ -134,7 +146,8 @@ class DataPack:
             right_id=self._right_id.copy(),
             right=self._right.copy(),
             comment=self._comment.copy(),
-            extend=self._extend.copy()
+            extend=self._extend.copy(),
+            feature=self._feature.copy()
         )
 
     @staticmethod
@@ -196,6 +209,7 @@ class DataPack:
         self._right = self._right.drop(empty_right_id)
         self._comment = self._comment.drop(empty_right_id)
         self._extend = self._extend.drop(empty_left_id)
+        self._feature = self._feature.drop(empty_right_id)
         self._relation.reset_index(drop=True, inplace=inplace)
 
     @_optional_inplace
@@ -276,6 +290,7 @@ class DataPack:
             right_df = dp.right.loc[dp.relation['id_right'][index]].reset_index()
             comment_df = dp.comment.loc[dp.relation['id_right'][index]].reset_index()
             extend_df = dp.extend.loc[dp.relation['id_left'][index]].reset_index()
+            feature_df = dp.feature.loc[dp.relation['id_right'][index]].reset_index()
             joined_table = left_df.join(right_df)
             for column in dp.relation.columns:
                 if column not in ['id_left', 'id_right']:
@@ -288,6 +303,8 @@ class DataPack:
             joined_table.drop(columns=['id_right_comment'], inplace=True)
             joined_table = joined_table.join(extend_df, rsuffix='_extend')
             joined_table.drop(columns=['id_left_extend'], inplace=True)
+            joined_table = joined_table.join(feature_df, rsuffix='_feature')
+            joined_table.drop(columns=['id_right_feature'], inplace=True)
             return joined_table
 
         def __call__(self):

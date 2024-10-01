@@ -68,6 +68,7 @@ class OurProcessor(DataProcessor, ABC):
         labels: list = []
         text_others: [list] = []
         extends: list[dict] = []
+        features: list = []
 
         for _, elem in tqdm(self._iterparse(filepath + '.xml', self.limit), desc=f'Parsing {coloring(filepath, "red")} XML file'):
             temp_text_lefts = []
@@ -176,6 +177,7 @@ class OurProcessor(DataProcessor, ABC):
             labels.extend(temp_labels)
             text_others.extend(temp_comments)
             extends.extend(temp_extends)
+            features.extend([None] * len(temp_text_right_ids))
 
         df = pd.DataFrame({
             'text_left': text_lefts,
@@ -183,7 +185,8 @@ class OurProcessor(DataProcessor, ABC):
             'text_right': text_rights,
             'label': labels,
             'comment': text_others,
-            'extend': extends
+            'extend': extends,
+            'feature': features
         })
 
         data_pack = self.pack(df)
@@ -213,8 +216,9 @@ class OurProcessor(DataProcessor, ABC):
         right = self._merge(df, id_right, 'text_right', 'id_right')
         comment = self._merge(df, id_right, 'comment', 'id_right')
         extend = self._merge(df, id_left, 'extend', 'id_left')
+        feature = self._merge(df, id_right, 'feature', 'id_right')
 
-        return DataPack(relation, left, right_id, right, comment, extend)
+        return DataPack(relation, left, right_id, right, comment, extend, feature)
 
     @staticmethod
     def _merge(data: pd.DataFrame, ids: typing.Union[list, np.array], text_label: str, id_label: str):
