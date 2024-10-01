@@ -11,7 +11,7 @@ from transformers import set_seed, AutoTokenizer
 
 from Model.DataLoader.DataProcessor import OurProcessor
 from Model.DataLoader.Dataset import OurDataset
-from Our.Dimension.ArgumentQuality import ArgumentQuality
+from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 
 
 class DataLoader:

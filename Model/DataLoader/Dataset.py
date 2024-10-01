@@ -17,7 +17,7 @@ from Model.DataLoader.DataProcessor import OurProcessor
 
 from warnings import simplefilter
 
-from Our.Dimension.ArgumentQuality import ArgumentQuality
+from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 
 simplefilter(action='ignore', category=FutureWarning)
 
