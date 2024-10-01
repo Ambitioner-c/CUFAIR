@@ -115,6 +115,10 @@ class DataPack:
     def extend(self) -> pd.DataFrame:
         return self._extend
 
+    @extend.setter
+    def extend(self, value):
+        self._extend = value
+
     def copy(self) -> 'DataPack':
         return DataPack(
             relation=self._relation.copy(),
