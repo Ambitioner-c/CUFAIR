@@ -9,8 +9,8 @@ import torch
 from torch.utils import data
 from transformers import set_seed, AutoTokenizer
 
-from DataProcessor import OurProcessor
-from Dataset import OurDataset
+from Model.DataLoader.DataProcessor import OurProcessor
+from Model.DataLoader.Dataset import OurDataset
 from Our.Dimension.ArgumentQuality import ArgumentQuality
 
 

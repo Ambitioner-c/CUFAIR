@@ -16,7 +16,7 @@ from transformers import (
     set_seed
 )
 
-from DataPack import DataPack
+from Model.DataLoader.DataPack import DataPack
 from Model.Baselines.Ablation.StackExchange.DataLoader.DataProcessor import PingMatch
 from Unit.cprint import coloring
 
