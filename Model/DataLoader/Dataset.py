@@ -112,7 +112,6 @@ class OurDataset(Dataset):
                     max_length=max_length,
                     return_tensors='pt'
                 )['input_ids']
-                print(comment_features.size())
                 data_pack.comment.iloc[_]['comment'] = comment_features
             else:
                 data_pack.comment.iloc[_]['comment'] = None
