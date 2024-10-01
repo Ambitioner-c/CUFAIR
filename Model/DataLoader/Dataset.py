@@ -79,7 +79,7 @@ class OurDataset(Dataset):
         left_df = dp.left
         left_features = tokenizer(
             left_df['text_left'].tolist(),
-            padding=True,
+            padding='max_length',
             truncation=True,
             max_length=max_length,
             return_tensors='pt'
@@ -92,7 +92,7 @@ class OurDataset(Dataset):
 
         right_features = tokenizer(
             [text if text is not None else '' for text in right_df['text_right'].tolist()],
-            padding=True,
+            padding='max_length',
             truncation=True,
             max_length=max_length,
             return_tensors='pt'
@@ -107,11 +107,12 @@ class OurDataset(Dataset):
             if len(comments):
                 comment_features = tokenizer(
                     [text if text is not None else '' for text in comments],
-                    padding=True,
+                    padding='max_length',
                     truncation=True,
                     max_length=max_length,
                     return_tensors='pt'
                 )['input_ids']
+                print(comment_features.size())
                 data_pack.comment.iloc[_]['comment'] = comment_features
             else:
                 data_pack.comment.iloc[_]['comment'] = None

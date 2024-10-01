@@ -32,7 +32,8 @@ class DataPack:
             right: pd.DataFrame,
             comment: pd.DataFrame,
             extend: pd.DataFrame,
-            feature: pd.DataFrame
+            feature: pd.DataFrame,
+            max_length: int = 512
     ):
         self._relation = relation
         self._left = left
@@ -41,6 +42,7 @@ class DataPack:
         self._comment = comment
         self._extend = extend
         self._feature = feature
+        self._max_length = max_length
 
     @property
     def has_label(self) -> bool:
@@ -73,10 +75,9 @@ class DataPack:
                 for comment in val:
                     seq_length = len(comment) if comment is not None else 0
                     if seq_length == 0:
-                        comment = Tensor([[101, 102]] * max_seq_length)
+                        comment = Tensor([[101, 102] + [0] * (self._max_length - 2)] * max_seq_length)
                     else:
-                        padding = comment[0].shape[0]
-                        comment = torch.cat((comment, Tensor([[101, 102] + [0] * (padding - 2)] * (max_seq_length - seq_length))), dim=0)
+                        comment = torch.cat((comment, Tensor([[101, 102] + [0] * (self._max_length - 2)] * (max_seq_length - seq_length))), dim=0)
                     comments.append(comment)
                 x[key] = comments
             elif key == 'right_id' or key == 'extend':
