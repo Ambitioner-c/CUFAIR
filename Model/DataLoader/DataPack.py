@@ -32,7 +32,7 @@ class DataPack:
             comment: pd.DataFrame,
             extend: pd.DataFrame,
             feature: pd.DataFrame,
-            max_length: int = 512
+            max_length: int
     ):
         self._relation = relation
         self._left = left
@@ -102,7 +102,8 @@ class DataPack:
             right=right.copy(),
             comment=comment.copy(),
             extend=extend.copy(),
-            feature=feature.copy()
+            feature=feature.copy(),
+            max_length=self._max_length
         )
 
     @property
@@ -157,7 +158,8 @@ class DataPack:
             right=self._right.copy(),
             comment=self._comment.copy(),
             extend=self._extend.copy(),
-            feature=self._feature.copy()
+            feature=self._feature.copy(),
+            max_length=self._max_length
         )
 
     @staticmethod
