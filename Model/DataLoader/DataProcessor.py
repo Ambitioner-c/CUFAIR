@@ -181,7 +181,7 @@ class OurProcessor(DataProcessor, ABC):
 
         df = pd.DataFrame({
             'text_left': text_lefts,
-            'text_right_id': text_right_ids,
+            'right_id': text_right_ids,
             'text_right': text_rights,
             'label': labels,
             'comment': text_others,
@@ -212,7 +212,7 @@ class OurProcessor(DataProcessor, ABC):
 
         # Build Left and Right
         left = self._merge(df, id_left, 'text_left', 'id_left')
-        right_id = self._merge(df, id_right, 'text_right_id', 'id_right')
+        right_id = self._merge(df, id_right, 'right_id', 'id_right')
         right = self._merge(df, id_right, 'text_right', 'id_right')
         comment = self._merge(df, id_right, 'comment', 'id_right')
         extend = self._merge(df, id_left, 'extend', 'id_left')
