@@ -75,9 +75,9 @@ class DataPack:
                 for comment in val:
                     seq_length = len(comment) if comment is not None else 0
                     if seq_length == 0:
-                        comment = Tensor([[101, 102] + [0] * (self._max_length - 2)] * max_seq_length)
+                        comment = torch.tensor([[101, 102] + [0] * (self._max_length - 2)] * max_seq_length, dtype=torch.long)
                     else:
-                        comment = torch.cat((comment, Tensor([[101, 102] + [0] * (self._max_length - 2)] * (max_seq_length - seq_length))), dim=0)
+                        comment = torch.cat((comment, torch.tensor([[101, 102] + [0] * (self._max_length - 2)] * (max_seq_length - seq_length), dtype=torch.long)), dim=0)
                     comments.append(comment)
                 x[key] = comments
             elif key == 'right_id' or key == 'extend':
