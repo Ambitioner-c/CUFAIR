@@ -5,8 +5,10 @@ import typing
 from typing import Optional
 
 import math
+
 import numpy as np
 import pandas as pd
+import spacy
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer, set_seed, AutoTokenizer
 
@@ -14,12 +16,16 @@ from DataLoader.DataPack import DataPack
 from DataLoader.DataProcessor import OurProcessor
 
 from warnings import simplefilter
+
+from Our.Dimension.ArgumentQuality import ArgumentQuality
+
 simplefilter(action='ignore', category=FutureWarning)
 
 
 class OurDataset(Dataset):
     def __init__(
             self,
+            argument_quality: ArgumentQuality,
             tokenizer: PreTrainedTokenizer,
             data_pack: DataPack,
             mode: str = 'pair',
@@ -37,7 +43,7 @@ class OurDataset(Dataset):
         if shuffle and sort:
             raise ValueError(f"parameters `shuffle` and `sort` conflict, should not both be `True`.")
 
-        data_pack = data_pack.copy()
+        dp = data_pack.copy()
         self._mode = mode
         self._num_dup = num_dup
         self._num_neg = num_neg
@@ -45,16 +51,16 @@ class OurDataset(Dataset):
         self._resample = (resample if mode != 'point' else False)
         self._shuffle = shuffle
         self._sort = sort
-        self._orig_relation = data_pack.relation
+        self._orig_relation = dp.relation
 
         if mode == 'pair':
-            data_pack.relation = self._reorganize_pair_wise(
+            dp.relation = self._reorganize_pair_wise(
                 relation=self._orig_relation,
                 num_dup=num_dup,
                 num_neg=num_neg
             )
 
-        self._data_pack = self.convert_examples_to_features(data_pack, tokenizer, max_length)
+        self._data_pack = self.convert_examples_to_features(dp, argument_quality, tokenizer, max_length)
         self._batch_indices = None
 
         self.reset_index()
@@ -62,11 +68,55 @@ class OurDataset(Dataset):
     @staticmethod
     def convert_examples_to_features(
             data_pack: DataPack,
+            argument_quality: ArgumentQuality,
             tokenizer: PreTrainedTokenizer,
             max_length: Optional[int] = None,
     ) -> DataPack:
-        # TODO: tokenizer(XXX)['input_ids']
-        pass
+        dp = argument_quality.get_quality(data_pack)
+        # dp = data_pack.copy()
+
+        # left
+        left_df = dp.left
+        left_features = tokenizer(
+            left_df['text_left'].tolist(),
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors='pt'
+        )['input_ids']
+        for _ in range(left_df.shape[0]):
+            data_pack.left.iloc[_]['text_left'] = left_features[_]
+
+        # right
+        right_df = dp.right
+
+        right_features = tokenizer(
+            [text if text is not None else '' for text in right_df['text_right'].tolist()],
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors='pt'
+        )['input_ids']
+        for _ in range(right_df.shape[0]):
+            data_pack.right.iloc[_]['text_right'] = right_features[_]
+
+        # Comment
+        comment_df = dp.comment
+        for _ in range(comment_df.shape[0]):
+            comments = comment_df.iloc[_]['comment']
+            if len(comments):
+                comment_features = tokenizer(
+                    [text if text is not None else '' for text in comments],
+                    padding=True,
+                    truncation=True,
+                    max_length=max_length,
+                    return_tensors='pt'
+                )['input_ids']
+                data_pack.comment.iloc[_]['comment'] = comment_features
+            else:
+                data_pack.comment.iloc[_]['comment'] = None
+
+        return data_pack
 
     def __getitem__(self, item) -> typing.Tuple[dict, np.ndarray]:
         if isinstance(item, slice):
@@ -241,33 +291,39 @@ def main():
     data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
     data_name = 'meta.stackoverflow.com'
 
+    spacy_path = "/data/cuifulai/Spacy/en_core_web_sm-3.7.1/en_core_web_sm/en_core_web_sm-3.7.1"
+    nlp = spacy.load(spacy_path)
+    argument_quality = ArgumentQuality(nlp)
+
     pretrained_model_path = '/data/cuifulai/PretrainedModel/bert-base-uncased'
     tokenizer = AutoTokenizer.from_pretrained(pretrained_model_path)
 
-    train_data_pack = OurProcessor(
+    test_dp = OurProcessor(
         data_name=data_name,
-        stage='train',
+        stage='test',
         task='ranking',
-        filtered=False,
+        filtered=True,
         threshold=5,
         normalize=True,
         return_classes=False,
         limit=0
-    ).get_train_examples(data_dir)
+    ).get_test_examples(data_dir)
 
-    train_dataset = OurDataset(
+    test_dataset = OurDataset(
+        argument_quality=argument_quality,
         tokenizer=tokenizer,
-        data_pack=train_data_pack,
-        mode='pair',
-        num_dup=2,
+        data_pack=test_dp,
+        mode='point',
+        num_dup=1,
         num_neg=1,
         batch_size=10,
-        resample=True,
-        shuffle=True,
+        resample=False,
+        shuffle=False,
         sort=False,
         max_length=512
     )
-    print(train_dataset[0])
+    print(len(test_dataset))
+    # print(test_dataset[0])
 
 
 if __name__ == '__main__':
