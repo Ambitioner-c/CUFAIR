@@ -58,7 +58,7 @@ class DataLoader:
 
             batch_x = {}
             for key, value in x.items():
-                if key == 'id_left' or key == 'id_right' or key == 'right_id' or key == 'extend':
+                if key == 'id_left' or key == 'id_right':
                     continue
                 batch_x[key] = value
 
