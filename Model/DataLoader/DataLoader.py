@@ -18,20 +18,13 @@ class DataLoader:
     def __init__(
             self,
             dataset: OurDataset,
-            device: typing.Union[torch.device, int, list, None] = None,
             stage='train',
     ):
         if stage not in ('train', 'dev', 'test'):
             raise ValueError(f"{stage} is not a valid stage type. Must be one of `train`, `dev`, `test`.")
 
-        if isinstance(device, list) and len(device):
-            device = device[0]
-        elif not (isinstance(device, torch.device) or isinstance(device, int)):
-            device = torch.device(
-                "cuda" if torch.cuda.is_available() else "cpu")
 
         self._dataset = dataset
-        self._device = device
         self._stage = stage
 
         self._dataloader = data.DataLoader(
@@ -71,10 +64,10 @@ class DataLoader:
 
             if y.dtype == 'int':  # task='classification'
                 batch_y = torch.tensor(
-                    y.squeeze(axis=-1), dtype=torch.long, device=self._device)
+                    y.squeeze(axis=-1), dtype=torch.long)
             else:  # task='ranking'
                 batch_y = torch.tensor(
-                    y, dtype=torch.float, device=self._device)
+                    y, dtype=torch.float)
             yield batch_x, batch_y
 
 
@@ -99,7 +92,7 @@ def main():
         threshold=5,
         normalize=True,
         return_classes=False,
-        limit=0
+        limit=100
     ).get_test_examples(data_dir)
 
     test_dataset = OurDataset(
@@ -118,11 +111,11 @@ def main():
 
     test_dataloader = DataLoader(
         test_dataset,
-        device=0,
         stage='test'
     )
     for example in test_dataloader:
         print(example)
+        exit()
 
 
 if __name__ == '__main__':
