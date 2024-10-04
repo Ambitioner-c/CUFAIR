@@ -85,22 +85,27 @@ class OurModel(nn.Module):
         feature = self.feature_norm(feature)                                                        # torch.Size([batch_size, 44])
 
         bert_output_left = self.reduction_layer(self.bert(text_left)['pooler_output'])              # torch.Size([batch_size, hidden_size])
+        bert_output_left = self.dropout(bert_output_left)
         bert_output_right = self.reduction_layer(self.bert(text_right)['pooler_output'])            # torch.Size([batch_size, hidden_size])
+        bert_output_right = self.dropout(bert_output_right)
 
         bert_output_comment = []
         for j in range(len(comment)):
             bert_output_comment.append(self.reduction_layer(self.bert(comment[j])['pooler_output']))
         bert_output_comment = torch.stack(bert_output_comment, dim=0)                               # torch.Size([batch_size, max_sequence_length, hidden_size])
+        bert_output_comment = self.dropout(bert_output_comment)
 
         # AQ
         # Relevancy
         relevancy = self.relevancy_layer(
             torch.cat([bert_output_left, bert_output_right], dim=-1))                        # torch.Size([batch_size, 20])
         argument_quality = torch.cat([relevancy, feature], dim=-1)                           # torch.Size([batch_size, 64])
+        argument_quality = self.dropout(argument_quality)
 
         # SC
         source_credibility = self.attention_lstm(bert_output_right.unsqueeze(1), bert_output_comment)[:, -1, :]     # torch.Size([batch_size, hidden_size])
         source_credibility = self.credibility_layer(source_credibility)                                             # torch.Size([batch_size, 64])
+        source_credibility = self.dropout(source_credibility)
 
         usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
         outputs = self.usefulness_layer(usefulness)                                                                  # torch.Size([batch_size, 1])
@@ -329,12 +334,14 @@ def parse_args():
                         help='Is from finetuned')
     parser.add_argument('--is_train', type=bool, default=True,
                         help='Is train')
-    parser.add_argument('--limit', nargs='?', default=[0, 0, 0],
+    parser.add_argument('--limit', nargs='?', default=[1600, 200, 200],
                         help='Limit')
     parser.add_argument('--lr', type=float, default=2e-5,
                         help='Learning rate')
     parser.add_argument('--max_length', type=int, default=256,
                         help='Max length')
+    parser.add_argument('--max_seq_length', type=int, default=32,
+                        help='Max sequence length')
     parser.add_argument('--normalize', type=bool, default=True,
                         help='Normalize')
     parser.add_argument('--num_attention_heads', type=int, default=12,
@@ -353,7 +360,7 @@ def parse_args():
                         help='Random seed')
     parser.add_argument('--spacy_path', nargs='?', default='/data/cuifulai/Spacy/en_core_web_sm-3.7.1/en_core_web_sm/en_core_web_sm-3.7.1',
                         help='Spacy path')
-    parser.add_argument('--step', type=int, default=100,
+    parser.add_argument('--step', type=int, default=1,
                         help='Step')
     parser.add_argument('--threshold', type=int, default=5,
                         help='Threshold')
@@ -375,7 +382,8 @@ def main():
         normalize=args.normalize,
         return_classes=False,
         limit=args.limit[0],
-        max_length=args.max_length
+        max_length=args.max_length,
+        max_seq_length=args.max_seq_length
     ).get_train_examples(args.data_dir)
     dev_dp = OurProcessor(
         data_name=args.data_name,
@@ -386,7 +394,8 @@ def main():
         normalize=args.normalize,
         return_classes=False,
         limit=args.limit[1],
-        max_length=args.max_length
+        max_length=args.max_length,
+        max_seq_length=args.max_seq_length
     ).get_dev_examples(args.data_dir)
     test_dp = OurProcessor(
         data_name=args.data_name,
@@ -397,7 +406,8 @@ def main():
         normalize=args.normalize,
         return_classes=False,
         limit=args.limit[2],
-        max_length=args.max_length
+        max_length=args.max_length,
+        max_seq_length=args.max_seq_length
     ).get_test_examples(args.data_dir)
 
     argument_quality = ArgumentQuality(spacy.load(args.spacy_path))
