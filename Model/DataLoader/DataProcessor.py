@@ -275,7 +275,8 @@ def main():
         threshold=5,
         normalize=True,
         return_classes=False,
-        limit=0
+        limit=0,
+        max_length=256
     ).get_train_examples(data_dir)
     pprint(train_dp.frame().iloc[0].to_dict())
 
@@ -287,7 +288,8 @@ def main():
         threshold=5,
         normalize=True,
         return_classes=False,
-        limit=0
+        limit=0,
+        max_length=256
     ).get_dev_examples(data_dir)
     print(dev_dp.frame())
 
@@ -299,7 +301,8 @@ def main():
         threshold=5,
         normalize=True,
         return_classes=False,
-        limit=0
+        limit=0,
+        max_length=256
     ).get_test_examples(data_dir)
     print(test_dp.frame())
 
