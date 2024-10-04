@@ -32,7 +32,8 @@ class DataPack:
             comment: pd.DataFrame,
             extend: pd.DataFrame,
             feature: pd.DataFrame,
-            max_length: int
+            max_length: int,
+            max_seq_length: int,
     ):
         self._relation = relation
         self._left = left
@@ -42,6 +43,7 @@ class DataPack:
         self._extend = extend
         self._feature = feature
         self._max_length = max_length
+        self._max_seq_length = max_seq_length
 
     @property
     def has_label(self) -> bool:
@@ -77,7 +79,7 @@ class DataPack:
                         comment = torch.tensor([[101, 102] + [0] * (self._max_length - 2)] * max_seq_length, dtype=torch.long)
                     else:
                         comment = torch.cat((comment, torch.tensor([[101, 102] + [0] * (self._max_length - 2)] * (max_seq_length - seq_length), dtype=torch.long)), dim=0)
-                    comments.append(comment)
+                    comments.append(comment[: self._max_seq_length])
                 x[key] = comments
             elif key == 'right_id' or key == 'extend':
                 continue
@@ -103,7 +105,8 @@ class DataPack:
             comment=comment.copy(),
             extend=extend.copy(),
             feature=feature.copy(),
-            max_length=self._max_length
+            max_length=self._max_length,
+            max_seq_length=self._max_seq_length
         )
 
     @property
@@ -159,7 +162,8 @@ class DataPack:
             comment=self._comment.copy(),
             extend=self._extend.copy(),
             feature=self._feature.copy(),
-            max_length=self._max_length
+            max_length=self._max_length,
+            max_seq_length=self._max_seq_length
         )
 
     @staticmethod

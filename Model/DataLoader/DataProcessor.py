@@ -32,7 +32,8 @@ class OurProcessor(DataProcessor, ABC):
             normalize: bool = True,
             return_classes: bool = False,
             limit: int = 0,
-            max_length: int = 512
+            max_length: int = 512,
+            max_seq_length: int = 32
     ):
         super(OurProcessor).__init__()
 
@@ -47,6 +48,7 @@ class OurProcessor(DataProcessor, ABC):
         self.return_classes = return_classes
         self.limit = limit
         self.max_length = max_length
+        self.max_seq_length = max_seq_length
 
     def get_all_examples(self, data_dir: str) -> DataPack:
         return self.create_examples(os.path.join(data_dir, self.data_name, self.data_name))
@@ -220,7 +222,7 @@ class OurProcessor(DataProcessor, ABC):
         extend = self._merge(df, id_left, 'extend', 'id_left')
         feature = self._merge(df, id_right, 'feature', 'id_right')
 
-        return DataPack(relation, left, right_id, right, comment, extend, feature, self.max_length)
+        return DataPack(relation, left, right_id, right, comment, extend, feature, self.max_length, self.max_seq_length)
 
     @staticmethod
     def _merge(data: pd.DataFrame, ids: typing.Union[list, np.array], text_label: str, id_label: str):
