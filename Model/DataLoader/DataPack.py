@@ -68,7 +68,7 @@ class DataPack:
 
         x = frame[columns].to_dict(orient='list')
 
-        max_seq_length = max([len(comment) if comment is not None else 0 for comment in x['comment']])
+        max_seq_length = max(max([len(comment) if comment is not None else 0 for comment in x['comment']]), 1)
 
         for key, val in x.items():
             if key == 'comment':
