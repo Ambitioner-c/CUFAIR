@@ -266,7 +266,7 @@ def eval_metric_on_data_frame(
     return (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5)
 
 
-def evaluate(args, task_name, model, test_dataloader, timestamp):
+def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
     model.eval()
     predictions = []
     for test_sample in test_dataloader:
@@ -294,7 +294,7 @@ def evaluate(args, task_name, model, test_dataloader, timestamp):
         f'{coloring("ndcg@3", "purple_bg")}:{round(ndcg_3, 4)}\t'
         f'{coloring("ndcg@5", "purple_bg")}:{round(ndcg_5, 4)}'
     )
-    if args.is_train:
+    if args.is_train or save_test:
         best_test_tsv = f'./Result/Temp/{task_name}-{timestamp}/best_test.tsv'
         with open(mkdir(best_test_tsv), 'a' if os.path.exists(best_test_tsv) else 'w') as f:
             f.write(decoloring(best_test_result) + '\n')
@@ -320,7 +320,7 @@ def parse_args():
                         help='Dropout probability')
     parser.add_argument('--epochs', type=int, default=3,
                         help='Number of epochs')
-    parser.add_argument('--finetuned_model_path', nargs='?', default='',
+    parser.add_argument('--finetuned_model_path', nargs='?', default='./FinetunedModel/Our_model-20241004_191930/best_model.pth',
                         help='Finetuned model path')
     parser.add_argument('--freeze', type=bool, default=False,
                         help='Freeze')
@@ -352,6 +352,8 @@ def parse_args():
                         help='Number of layers')
     parser.add_argument('--pretrained_model_path', nargs='?', default='/data/cuifulai/PretrainedModel/bert-base-uncased',
                         help='Pretrained model path')
+    parser.add_argument('--save_test', type=bool, default=False,
+                        help='Save test')
     parser.add_argument('--seed', type=int, default=2024,
                         help='Random seed')
     parser.add_argument('--spacy_path', nargs='?', default='/data/cuifulai/Spacy/en_core_web_sm-3.7.1/en_core_web_sm/en_core_web_sm-3.7.1',
@@ -369,18 +371,41 @@ def main():
 
     set_seed(args.seed)
 
-    train_dp = OurProcessor(
-        data_name=args.data_name,
-        stage='train',
-        task='ranking',
-        filtered=False,
-        threshold=args.threshold,
-        normalize=args.normalize,
-        return_classes=False,
-        limit=args.limit[0],
-        max_length=args.max_length,
-        max_seq_length=args.max_seq_length
-    ).get_train_examples(args.data_dir)
+    argument_quality = ArgumentQuality(spacy.load(args.spacy_path))
+    tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model_path)
+
+    if args.is_train:
+        train_dp = OurProcessor(
+            data_name=args.data_name,
+            stage='train',
+            task='ranking',
+            filtered=False,
+            threshold=args.threshold,
+            normalize=args.normalize,
+            return_classes=False,
+            limit=args.limit[0],
+            max_length=args.max_length,
+            max_seq_length=args.max_seq_length
+        ).get_train_examples(args.data_dir)
+        train_dataset = OurDataset(
+            argument_quality=argument_quality,
+            tokenizer=tokenizer,
+            data_pack=train_dp,
+            mode='pair',
+            num_dup=args.num_dup,
+            num_neg=args.num_neg,
+            batch_size=args.batch_size,
+            resample=True,
+            shuffle=True,
+            max_length=args.max_length
+        )
+        train_dataloader = DataLoader(
+            train_dataset,
+            stage='train'
+        )
+    else:
+        train_dataloader = None
+
     dev_dp = OurProcessor(
         data_name=args.data_name,
         stage='dev',
@@ -406,21 +431,6 @@ def main():
         max_seq_length=args.max_seq_length
     ).get_test_examples(args.data_dir)
 
-    argument_quality = ArgumentQuality(spacy.load(args.spacy_path))
-    tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model_path)
-
-    train_dataset = OurDataset(
-        argument_quality=argument_quality,
-        tokenizer=tokenizer,
-        data_pack=train_dp,
-        mode='pair',
-        num_dup=args.num_dup,
-        num_neg=args.num_neg,
-        batch_size=args.batch_size,
-        resample=True,
-        shuffle=True,
-        max_length=args.max_length
-    )
     dev_dataset = OurDataset(
         argument_quality=argument_quality,
         tokenizer=tokenizer,
@@ -442,10 +452,6 @@ def main():
         max_length=args.max_length
     )
 
-    train_dataloader = DataLoader(
-        train_dataset,
-        stage='train'
-    )
     dev_dataloader = DataLoader(
         dev_dataset,
         stage='dev'
@@ -467,9 +473,13 @@ def main():
         num_layers=args.num_layers,
     ).to(device)
 
-    best_model, timestamp = train(args, args.task_name, model, train_dataloader, dev_dataloader, args.epochs, args.lr, args.step)
+    timestamp = None
+    if args.is_from_finetuned:
+        model.load_state_dict(torch.load(args.finetuned_model_path))
+    if args.is_train:
+        model, timestamp = train(args, args.task_name, model, train_dataloader, dev_dataloader, args.epochs, args.lr, args.step)
 
-    evaluate(args, args.task_name, best_model, test_dataloader, timestamp)
+    evaluate(args, args.task_name, model, test_dataloader, timestamp, args.save_test)
 
 if __name__ == '__main__':
     main()
