@@ -26,13 +26,14 @@ from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 from warnings import simplefilter
 
 from Model.Unit.cprint import coloring, decoloring
-from Model.Unit.function import mkdir, save_args_to_file
+from Model.Unit.function import mkdir, save_args_to_file, ignore_warning
 from Model.Unit.metrics import precision, average_precision, mean_average_precision, mean_reciprocal_rank, \
     discounted_cumulative_gain, normalized_discounted_cumulative_gain
 
 simplefilter(action='ignore', category=FutureWarning)
 simplefilter(action='ignore', category=UserWarning)
 simplefilter(action='ignore', category=DeprecationWarning)
+ignore_warning(name="transformers")
 
 
 class OurModel(nn.Module):
@@ -85,27 +86,22 @@ class OurModel(nn.Module):
         feature = self.feature_norm(feature)                                                        # torch.Size([batch_size, 44])
 
         bert_output_left = self.reduction_layer(self.bert(text_left)['pooler_output'])              # torch.Size([batch_size, hidden_size])
-        bert_output_left = self.dropout(bert_output_left)
         bert_output_right = self.reduction_layer(self.bert(text_right)['pooler_output'])            # torch.Size([batch_size, hidden_size])
-        bert_output_right = self.dropout(bert_output_right)
 
         bert_output_comment = []
         for j in range(len(comment)):
             bert_output_comment.append(self.reduction_layer(self.bert(comment[j])['pooler_output']))
         bert_output_comment = torch.stack(bert_output_comment, dim=0)                               # torch.Size([batch_size, max_sequence_length, hidden_size])
-        bert_output_comment = self.dropout(bert_output_comment)
 
         # AQ
         # Relevancy
         relevancy = self.relevancy_layer(
             torch.cat([bert_output_left, bert_output_right], dim=-1))                        # torch.Size([batch_size, 20])
         argument_quality = torch.cat([relevancy, feature], dim=-1)                           # torch.Size([batch_size, 64])
-        argument_quality = self.dropout(argument_quality)
 
         # SC
         source_credibility = self.attention_lstm(bert_output_right.unsqueeze(1), bert_output_comment)[:, -1, :]     # torch.Size([batch_size, hidden_size])
         source_credibility = self.credibility_layer(source_credibility)                                             # torch.Size([batch_size, 64])
-        source_credibility = self.dropout(source_credibility)
 
         usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
         outputs = self.usefulness_layer(usefulness)                                                                  # torch.Size([batch_size, 1])
