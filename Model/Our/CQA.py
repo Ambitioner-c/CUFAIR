@@ -317,7 +317,7 @@ def parse_args():
                         help='Device')
     parser.add_argument('--dropout_prob', type=float, default=0.1,
                         help='Dropout probability')
-    parser.add_argument('--epochs', type=int, default=5,
+    parser.add_argument('--epochs', type=int, default=3,
                         help='Number of epochs')
     parser.add_argument('--finetuned_model_path', nargs='?', default='',
                         help='Finetuned model path')
