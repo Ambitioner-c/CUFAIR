@@ -16,11 +16,11 @@ from torch.optim import Adam
 from tqdm import tqdm
 from transformers import BertModel, set_seed, AutoTokenizer
 
-from Losses.RankHingeLoss import RankHingeLoss
+from Model.Losses.RankHingeLoss import RankHingeLoss
 from Model.DataLoader.DataLoader import DataLoader
 from Model.DataLoader.DataProcessor import OurProcessor
 from Model.DataLoader.Dataset import OurDataset
-from Model.LSTM.AttentionLSTM import AttentionLSTMModel
+from Model.LSTM.SACILSTM import SACILSTMModel
 from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 
 from warnings import simplefilter
@@ -50,6 +50,7 @@ class OurModel(nn.Module):
             bert_hidden_size: int = 768,
             dropout_prob: float = 0.1,
             num_layers: int = 1,
+            num_attention_heads: int = 12,
     ):
         super(OurModel, self).__init__()
         self.device = device
@@ -68,12 +69,13 @@ class OurModel(nn.Module):
 
         self.relevancy_layer = nn.Linear(hidden_size * 2, 20)
 
-        self.attention_lstm = AttentionLSTMModel(
+        self.sacilstm = SACILSTMModel(
             attention_size=hidden_size,
             input_size=hidden_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
             output_size=hidden_size,
+            num_attention_heads=num_attention_heads,
         )
 
         self.credibility_layer = nn.Linear(hidden_size, 64)
@@ -86,6 +88,7 @@ class OurModel(nn.Module):
         text_left = torch.stack([x.to(self.device) for x in inputs['text_left']], dim=0)            # torch.Size([batch_size, max_length])
         text_right = torch.stack([x.to(self.device) for x in inputs['text_right']], dim=0)          # torch.Size([batch_size, max_length])
         comment = torch.stack([x.to(self.device) for x in inputs['comment']], dim=0)                # torch.Size([batch_size, max_sequence_length, max_length])
+        ping = torch.stack([x.to(self.device) for x in inputs['ping']], dim=0)                      # torch.Size([batch_size, max_sequence_length])
         feature = torch.stack([torch.tensor(x).to(self.device) for x in inputs['feature']], dim=0)  # torch.Size([batch_size, 44])
         feature = self.feature_norm(feature)                                                        # torch.Size([batch_size, 44])
 
@@ -104,7 +107,7 @@ class OurModel(nn.Module):
         argument_quality = torch.cat([relevancy, feature], dim=-1)                           # torch.Size([batch_size, 64])
 
         # SC
-        source_credibility = self.attention_lstm(bert_output_right.unsqueeze(1), bert_output_comment)[:, -1, :]     # torch.Size([batch_size, hidden_size])
+        source_credibility = self.sacilstm(bert_output_right.unsqueeze(1), bert_output_comment, ping)[:, -1, :]     # torch.Size([batch_size, hidden_size])
         source_credibility = self.credibility_layer(source_credibility)                                             # torch.Size([batch_size, 64])
 
         usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
@@ -549,6 +552,7 @@ def main():
         bert_hidden_size=args.bert_hidden_size,
         dropout_prob=args.dropout_prob,
         num_layers=args.num_layers,
+        num_attention_heads=args.num_attention_heads,
     ).to(device)
 
     timestamp = None
