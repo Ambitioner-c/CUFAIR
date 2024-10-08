@@ -10,14 +10,14 @@ import math
 from transformers import set_seed
 
 
-class SustainedAttentionLSTMCell(nn.Module):
+class SALSTMCell(nn.Module):
     def __init__(
             self,
             attention_size: int,
             input_size: int,
             hidden_size: int
     ):
-        super(SustainedAttentionLSTMCell, self).__init__()
+        super(SALSTMCell, self).__init__()
         self.attention_size = attention_size
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -49,7 +49,7 @@ class SustainedAttentionLSTMCell(nn.Module):
         return h, c
 
 
-class SustainedAttentionLSTM(nn.Module):
+class SALSTM(nn.Module):
     def __init__(
             self,
             attention_size: int,
@@ -58,13 +58,13 @@ class SustainedAttentionLSTM(nn.Module):
             num_layers: int = 1,
             batch_first: bool = False,
     ):
-        super(SustainedAttentionLSTM, self).__init__()
+        super(SALSTM, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.batch_first = batch_first
-        layers = [SustainedAttentionLSTMCell(attention_size, input_size, hidden_size)]
+        layers = [SALSTMCell(attention_size, input_size, hidden_size)]
         for _ in range(self.num_layers - 1):
-            layers += [SustainedAttentionLSTMCell(attention_size, hidden_size, hidden_size)]
+            layers += [SALSTMCell(attention_size, hidden_size, hidden_size)]
         self.net = nn.Sequential(*layers)
 
         self.h = None
@@ -101,7 +101,7 @@ class SustainedAttentionLSTM(nn.Module):
         return self.h[:, -1], (self.h[-1], self.c[-1])
 
 
-class SustainedAttentionLSTMModel(nn.Module):
+class SALSTMModel(nn.Module):
     def __init__(
             self,
             attention_size: int,
@@ -110,10 +110,10 @@ class SustainedAttentionLSTMModel(nn.Module):
             num_layers: int,
             output_size: int
     ):
-        super(SustainedAttentionLSTMModel, self).__init__()
+        super(SALSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.attentionlstm = SustainedAttentionLSTM(attention_size, input_size, hidden_size, num_layers, batch_first=True)
+        self.attentionlstm = SALSTM(attention_size, input_size, hidden_size, num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, attention: Tensor, x: Tensor) -> Tensor:
@@ -135,7 +135,7 @@ def main():
     hidden_size = 5
     num_layers = 2
     output_size = 5
-    model = SustainedAttentionLSTMModel(input_size, input_size, hidden_size, num_layers, output_size)
+    model = SALSTMModel(input_size, input_size, hidden_size, num_layers, output_size)
 
     outputs = model(attentions, inputs)
     print(outputs.size())
