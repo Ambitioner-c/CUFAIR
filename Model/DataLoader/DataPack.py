@@ -83,6 +83,16 @@ class DataPack:
                         comment = torch.cat((comment, torch.tensor([[101, 102] + [0] * (self._max_length - 2)] * (max_seq_length - seq_length), dtype=torch.long)), dim=0)
                     comments.append(comment[: self._max_seq_length])
                 x[key] = comments
+            elif key == 'ping':
+                pings = []
+                for ping in val:
+                    seq_length = len(ping) if ping is not None else 0
+                    if seq_length == 0:
+                        ping = [0] * max_seq_length
+                    else:
+                        ping = ping + [0] * (max_seq_length - seq_length)
+                    pings.append(ping[: self._max_seq_length])
+                x[key] = pings
             elif key == 'right_id' or key == 'extend':
                 continue
             else:
