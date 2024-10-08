@@ -88,9 +88,9 @@ class DataPack:
                 for ping in val:
                     seq_length = len(ping) if ping is not None else 0
                     if seq_length == 0:
-                        ping = [0] * max_seq_length
+                        ping = torch.tensor([0] * max_seq_length, dtype=torch.long)
                     else:
-                        ping = ping + [0] * (max_seq_length - seq_length)
+                        ping = torch.tensor(ping + [0] * (max_seq_length - seq_length), dtype=torch.long)
                     pings.append(ping[: self._max_seq_length])
                 x[key] = pings
             elif key == 'right_id' or key == 'extend':
