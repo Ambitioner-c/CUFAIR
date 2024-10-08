@@ -10,13 +10,13 @@ import math
 from transformers import set_seed
 
 
-class VanillaLSTMCell(nn.Module):
+class LSTMCell(nn.Module):
     def __init__(
             self,
             input_size: int,
             hidden_size: int
     ):
-        super(VanillaLSTMCell, self).__init__()
+        super(LSTMCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.weight_ih = nn.Parameter(Tensor(input_size, hidden_size * 4))
@@ -44,7 +44,7 @@ class VanillaLSTMCell(nn.Module):
         return h, c
 
 
-class VanillaLSTM(nn.Module):
+class LSTM(nn.Module):
     def __init__(
             self,
             input_size: int,
@@ -52,13 +52,13 @@ class VanillaLSTM(nn.Module):
             num_layers: int = 1,
             batch_first: bool = False,
     ):
-        super(VanillaLSTM, self).__init__()
+        super(LSTM, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.batch_first = batch_first
-        layers = [VanillaLSTMCell(input_size, hidden_size)]
+        layers = [LSTMCell(input_size, hidden_size)]
         for _ in range(self.num_layers - 1):
-            layers += [VanillaLSTMCell(hidden_size, hidden_size)]
+            layers += [LSTMCell(hidden_size, hidden_size)]
         self.net = nn.Sequential(*layers)
 
         self.h = None
@@ -93,7 +93,7 @@ class VanillaLSTM(nn.Module):
         return self.h[:, -1], (self.h[-1], self.c[-1])
 
 
-class VanillaLSTMModel(nn.Module):
+class LSTMModel(nn.Module):
     def __init__(
             self,
             input_size: int,
@@ -101,10 +101,10 @@ class VanillaLSTMModel(nn.Module):
             num_layers: int,
             output_size: int
     ):
-        super(VanillaLSTMModel, self).__init__()
+        super(LSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.vanilla_lstm = VanillaLSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.vanilla_lstm = LSTM(input_size, hidden_size, num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -125,7 +125,7 @@ def main():
     hidden_size = 5
     num_layers = 2
     output_size = 5
-    model = VanillaLSTMModel(input_size, hidden_size, num_layers, output_size)
+    model = LSTMModel(input_size, hidden_size, num_layers, output_size)
 
     outputs = model(inputs)
     print(outputs.size())
