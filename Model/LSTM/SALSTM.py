@@ -113,11 +113,11 @@ class SALSTMModel(nn.Module):
         super(SALSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.attentionlstm = SALSTM(attention_size, input_size, hidden_size, num_layers, batch_first=True)
+        self.salstm = SALSTM(attention_size, input_size, hidden_size, num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, attention: Tensor, x: Tensor) -> Tensor:
-        out, _ = self.attentionlstm(attention, x, None)
+        out, _ = self.salstm(attention, x, None)
         out = self.fc(out)
 
         return out
