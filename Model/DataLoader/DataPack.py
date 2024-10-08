@@ -30,6 +30,7 @@ class DataPack:
             right_id: pd.DataFrame,
             right: pd.DataFrame,
             comment: pd.DataFrame,
+            ping: pd.DataFrame,
             extend: pd.DataFrame,
             feature: pd.DataFrame,
             max_length: int,
@@ -40,6 +41,7 @@ class DataPack:
         self._right_id = right_id
         self._right = right
         self._comment = comment
+        self._ping = ping
         self._extend = extend
         self._feature = feature
         self._max_length = max_length
@@ -95,6 +97,7 @@ class DataPack:
         right_id = self._right_id.loc[relation['id_right'].unique()]
         right = self._right.loc[relation['id_right'].unique()]
         comment = self._comment.loc[relation['id_right'].unique()]
+        ping = self._ping.loc[relation['id_right'].unique()]
         extend = self._extend.loc[relation['id_left'].unique()]
         feature = self._feature.loc[relation['id_right'].unique()]
         return DataPack(
@@ -103,6 +106,7 @@ class DataPack:
             right_id=right_id.copy(),
             right=right.copy(),
             comment=comment.copy(),
+            ping=ping.copy(),
             extend=extend.copy(),
             feature=feature.copy(),
             max_length=self._max_length,
@@ -138,6 +142,10 @@ class DataPack:
         return self._comment
 
     @property
+    def ping(self) -> pd.DataFrame:
+        return self._ping
+
+    @property
     def extend(self) -> pd.DataFrame:
         return self._extend
 
@@ -160,6 +168,7 @@ class DataPack:
             right_id=self._right_id.copy(),
             right=self._right.copy(),
             comment=self._comment.copy(),
+            ping=self._ping.copy(),
             extend=self._extend.copy(),
             feature=self._feature.copy(),
             max_length=self._max_length,
@@ -224,6 +233,7 @@ class DataPack:
         self._right_id = self._right_id.drop(empty_right_id)
         self._right = self._right.drop(empty_right_id)
         self._comment = self._comment.drop(empty_right_id)
+        self._ping = self._ping.drop(empty_right_id)
         self._extend = self._extend.drop(empty_left_id)
         self._feature = self._feature.drop(empty_right_id)
         self._relation.reset_index(drop=True, inplace=inplace)
@@ -305,6 +315,7 @@ class DataPack:
             right_id_df = dp.right_id.loc[dp.relation['id_right'][index]].reset_index()
             right_df = dp.right.loc[dp.relation['id_right'][index]].reset_index()
             comment_df = dp.comment.loc[dp.relation['id_right'][index]].reset_index()
+            ping_df = dp.ping.loc[dp.relation['id_right'][index]].reset_index()
             extend_df = dp.extend.loc[dp.relation['id_left'][index]].reset_index()
             feature_df = dp.feature.loc[dp.relation['id_right'][index]].reset_index()
             joined_table = left_df.join(right_df)
@@ -317,6 +328,8 @@ class DataPack:
             joined_table.drop(columns=['id_right_right_id'], inplace=True)
             joined_table = joined_table.join(comment_df, rsuffix='_comment')
             joined_table.drop(columns=['id_right_comment'], inplace=True)
+            joined_table = joined_table.join(ping_df, rsuffix='_ping')
+            joined_table.drop(columns=['id_right_ping'], inplace=True)
             joined_table = joined_table.join(extend_df, rsuffix='_extend')
             joined_table.drop(columns=['id_left_extend'], inplace=True)
             joined_table = joined_table.join(feature_df, rsuffix='_feature')

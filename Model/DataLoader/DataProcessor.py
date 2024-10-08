@@ -16,7 +16,7 @@ Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Tr
 6447   L-746  ...    None
 6448   L-746  ...    None
 
-[6449 rows x 9 columns]
+[6449 rows x 10 columns]
 Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Dev/dev XML file: 121it [00:00, 762.90it/s]
     id_left  ... feature
 0       L-0  ...    None
@@ -31,7 +31,7 @@ Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/De
 323    L-45  ...    None
 324    L-45  ...    None
 
-[325 rows x 9 columns]
+[325 rows x 10 columns]
 Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Test/test XML file: 123it [00:00, 740.05it/s]
     id_left  ... feature
 0       L-0  ...    None
@@ -46,7 +46,7 @@ Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Te
 293    L-42  ...    None
 294    L-42  ...    None
 
-[295 rows x 9 columns]
+[295 rows x 10 columns]
 """
 import os
 import typing
@@ -121,6 +121,7 @@ class OurProcessor(DataProcessor, ABC):
         text_rights: list = []
         labels: list = []
         text_others: [list] = []
+        ping_others: [list] = []
         extends: list[dict] = []
         features: list = []
 
@@ -130,6 +131,7 @@ class OurProcessor(DataProcessor, ABC):
             temp_text_rights = []
             temp_labels = []
             temp_comments = []
+            temp_pings = []
 
             # Question
             question = elem.find('Question')
@@ -194,8 +196,9 @@ class OurProcessor(DataProcessor, ABC):
                 elif self.mode == 'accept':
                     temp_labels.append(1 if a_accepteds[__] == 'Yes' else 0)
                 temp_comments.append(c_bodys[__])
+                temp_pings.append(a_pings[__])
 
-            assert len(temp_text_lefts) == len(temp_text_right_ids) == len(temp_text_rights) == len(temp_labels) == len(temp_comments)
+            assert len(temp_text_lefts) == len(temp_text_right_ids) == len(temp_text_rights) == len(temp_labels) == len(temp_comments) == len(temp_pings)
             if len(temp_labels) < self.threshold:
                 continue
 
@@ -236,6 +239,7 @@ class OurProcessor(DataProcessor, ABC):
             text_rights.extend(temp_text_rights)
             labels.extend(temp_labels)
             text_others.extend(temp_comments)
+            ping_others.extend(temp_pings)
             extends.extend(temp_extends)
             features.extend([None] * len(temp_text_right_ids))
 
@@ -245,6 +249,7 @@ class OurProcessor(DataProcessor, ABC):
             'text_right': text_rights,
             'label': labels,
             'comment': text_others,
+            'ping': ping_others,
             'extend': extends,
             'feature': features
         })
@@ -275,10 +280,11 @@ class OurProcessor(DataProcessor, ABC):
         right_id = self._merge(df, id_right, 'right_id', 'id_right')
         right = self._merge(df, id_right, 'text_right', 'id_right')
         comment = self._merge(df, id_right, 'comment', 'id_right')
+        ping = self._merge(df, id_right, 'ping', 'id_right')
         extend = self._merge(df, id_left, 'extend', 'id_left')
         feature = self._merge(df, id_right, 'feature', 'id_right')
 
-        return DataPack(relation, left, right_id, right, comment, extend, feature, self.max_length, self.max_seq_length)
+        return DataPack(relation, left, right_id, right, comment, ping, extend, feature, self.max_length, self.max_seq_length)
 
     @staticmethod
     def _merge(data: pd.DataFrame, ids: typing.Union[list, np.array], text_label: str, id_label: str):
@@ -338,7 +344,7 @@ def main():
         max_seq_length=32,
         mode='accept',
     ).get_train_examples(data_dir)
-    pprint(train_dp.frame())
+    pprint(train_dp.frame().head().to_dict())
 
     dev_dp = OurProcessor(
         data_name=data_name,
