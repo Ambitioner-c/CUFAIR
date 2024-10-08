@@ -10,14 +10,14 @@ import math
 from transformers import set_seed
 
 
-class SALSTMCell(nn.Module):
+class SACILSTMCell(nn.Module):
     def __init__(
             self,
             attention_size: int,
             input_size: int,
             hidden_size: int
     ):
-        super(SALSTMCell, self).__init__()
+        super(SACILSTMCell, self).__init__()
         self.attention_size = attention_size
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -49,7 +49,7 @@ class SALSTMCell(nn.Module):
         return h, c
 
 
-class SALSTM(nn.Module):
+class SACILSTM(nn.Module):
     def __init__(
             self,
             attention_size: int,
@@ -58,13 +58,13 @@ class SALSTM(nn.Module):
             num_layers: int = 1,
             batch_first: bool = False,
     ):
-        super(SALSTM, self).__init__()
+        super(SACILSTM, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.batch_first = batch_first
-        layers = [SALSTMCell(attention_size, input_size, hidden_size)]
+        layers = [SACILSTMCell(attention_size, input_size, hidden_size)]
         for _ in range(self.num_layers - 1):
-            layers += [SALSTMCell(attention_size, hidden_size, hidden_size)]
+            layers += [SACILSTMCell(attention_size, hidden_size, hidden_size)]
         self.net = nn.Sequential(*layers)
 
         self.h = None
@@ -74,6 +74,7 @@ class SALSTM(nn.Module):
             self,
             attention: Tensor,
             x: Tensor,
+            ping: Tensor,
             init_states: Tuple[Tensor, Tensor]
     ) -> Tuple[Tensor, Tuple[Tensor, Tensor]]:
         # Input and output size : (batch_size, seq_length, input_size)
@@ -91,6 +92,7 @@ class SALSTM(nn.Module):
         for i, cell in enumerate(self.net):  # Layers
             h_t, c_t = self.h[0, i].clone(), self.c[0, i].clone()
             for t in range(x.size(0)):  # Sequences
+                # TODO Reconstructing the inputs by pings
                 h_t, c_t = cell(attention[0], inputs[t], (h_t, c_t))
                 self.h[t, i], self.c[t, i] = h_t, c_t
             inputs = self.h[:, i].clone()
@@ -101,7 +103,7 @@ class SALSTM(nn.Module):
         return self.h[:, -1], (self.h[-1], self.c[-1])
 
 
-class SALSTMModel(nn.Module):
+class SACILSTMModel(nn.Module):
     def __init__(
             self,
             attention_size: int,
@@ -110,14 +112,14 @@ class SALSTMModel(nn.Module):
             num_layers: int,
             output_size: int
     ):
-        super(SALSTMModel, self).__init__()
+        super(SACILSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.attentionlstm = SALSTM(attention_size, input_size, hidden_size, num_layers, batch_first=True)
+        self.attentionlstm = SACILSTM(attention_size, input_size, hidden_size, num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_size, output_size)
 
-    def forward(self, attention: Tensor, x: Tensor) -> Tensor:
-        out, _ = self.attentionlstm(attention, x, None)
+    def forward(self, attention: Tensor, x: Tensor, ping: Tensor) -> Tensor:
+        out, _ = self.attentionlstm(attention, x, ping, None)
         out = self.fc(out)
 
         return out
@@ -131,13 +133,20 @@ def main():
     input_size = 10
     attentions = torch.randn(batch_size, 1, input_size)
     inputs = torch.randn(batch_size, seq_length, input_size)
+    pings = torch.tensor(
+        [[0, 0, 0],
+        [0, 0, 1],
+        [0, 1, 1],
+        [0, 1, 2],
+        [0, 1, 0]]
+    )
 
     hidden_size = 5
     num_layers = 2
     output_size = 5
-    model = SALSTMModel(input_size, input_size, hidden_size, num_layers, output_size)
+    model = SACILSTMModel(input_size, input_size, hidden_size, num_layers, output_size)
 
-    outputs = model(attentions, inputs)
+    outputs = model(attentions, inputs, pings)
     print(outputs.size())
 
 
