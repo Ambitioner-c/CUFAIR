@@ -1,8 +1,56 @@
 # coding=utf-8
 # @Author: Fulai Cui (cuifulai@mail.hfut.edu.cn)
 # @Time: 2024/9/9 19:36
+"""
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Train/train XML file: 974it [00:01, 954.31it/s]
+     id_left  ... feature
+0        L-0  ...    None
+1        L-0  ...    None
+2        L-0  ...    None
+3        L-0  ...    None
+4        L-0  ...    None
+...      ...  ...     ...
+6444   L-746  ...    None
+6445   L-746  ...    None
+6446   L-746  ...    None
+6447   L-746  ...    None
+6448   L-746  ...    None
+
+[6449 rows x 9 columns]
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Dev/dev XML file: 121it [00:00, 762.90it/s]
+    id_left  ... feature
+0       L-0  ...    None
+1       L-0  ...    None
+2       L-0  ...    None
+3       L-0  ...    None
+4       L-0  ...    None
+..      ...  ...     ...
+320    L-45  ...    None
+321    L-45  ...    None
+322    L-45  ...    None
+323    L-45  ...    None
+324    L-45  ...    None
+
+[325 rows x 9 columns]
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Test/test XML file: 123it [00:00, 740.05it/s]
+    id_left  ... feature
+0       L-0  ...    None
+1       L-0  ...    None
+2       L-0  ...    None
+3       L-0  ...    None
+4       L-0  ...    None
+..      ...  ...     ...
+290    L-42  ...    None
+291    L-42  ...    None
+292    L-42  ...    None
+293    L-42  ...    None
+294    L-42  ...    None
+
+[295 rows x 9 columns]
+"""
 import os
 import typing
+from typing import Optional
 from abc import ABC
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
@@ -28,12 +76,13 @@ class OurProcessor(DataProcessor, ABC):
             stage: str = 'train',
             task: str = 'ranking',
             filtered: bool = False,
-            threshold: int = 1,
+            threshold: int = 5,
             normalize: bool = True,
             return_classes: bool = False,
             limit: int = 0,
-            max_length: int = 512,
-            max_seq_length: int = 32
+            max_length: int = 256,
+            max_seq_length: int = 32,
+            mode: Optional[str] = 'accept',
     ):
         super(OurProcessor).__init__()
 
@@ -49,6 +98,7 @@ class OurProcessor(DataProcessor, ABC):
         self.limit = limit
         self.max_length = max_length
         self.max_seq_length = max_seq_length
+        self.mode = mode
 
     def get_all_examples(self, data_dir: str) -> DataPack:
         return self.create_examples(os.path.join(data_dir, self.data_name, self.data_name))
@@ -139,7 +189,10 @@ class OurProcessor(DataProcessor, ABC):
                 temp_text_lefts.append(q_body)
                 temp_text_right_ids.append(a_ids[__])
                 temp_text_rights.append(a_bodys[__])
-                temp_labels.append(a_scores[__])
+                if self.mode == 'score':
+                    temp_labels.append(a_scores[__])
+                elif self.mode == 'accept':
+                    temp_labels.append(1 if a_accepteds[__] == 'Yes' else 0)
                 temp_comments.append(c_bodys[__])
 
             assert len(temp_text_lefts) == len(temp_text_right_ids) == len(temp_text_rights) == len(temp_labels) == len(temp_comments)
@@ -151,10 +204,13 @@ class OurProcessor(DataProcessor, ABC):
                     continue
 
             if self.normalize:
-                temp_labels = [float(label) for label in temp_labels]
-                min_label = min(temp_labels)
-                max_label = max(temp_labels)
-                temp_labels = [round((label - min_label) / (max_label - min_label), 2) for label in temp_labels]
+                if self.mode == 'score':
+                    temp_labels = [float(label) for label in temp_labels]
+                    min_label = min(temp_labels)
+                    max_label = max(temp_labels)
+                    temp_labels = [round((label - min_label) / (max_label - min_label), 2) for label in temp_labels]
+                elif self.mode == 'accept':
+                    temp_labels = [float(label) for label in temp_labels]
 
             extend = {
                 'QID': q_id,
@@ -278,9 +334,11 @@ def main():
         normalize=True,
         return_classes=False,
         limit=0,
-        max_length=256
+        max_length=256,
+        max_seq_length=32,
+        mode='accept',
     ).get_train_examples(data_dir)
-    pprint(train_dp.frame().iloc[0].to_dict())
+    pprint(train_dp.frame())
 
     dev_dp = OurProcessor(
         data_name=data_name,
@@ -291,7 +349,9 @@ def main():
         normalize=True,
         return_classes=False,
         limit=0,
-        max_length=256
+        max_length=256,
+        max_seq_length=32,
+        mode='accept',
     ).get_dev_examples(data_dir)
     print(dev_dp.frame())
 
@@ -304,7 +364,9 @@ def main():
         normalize=True,
         return_classes=False,
         limit=0,
-        max_length=256
+        max_length=256,
+        max_seq_length=32,
+        mode='accept',
     ).get_test_examples(data_dir)
     print(test_dp.frame())
 

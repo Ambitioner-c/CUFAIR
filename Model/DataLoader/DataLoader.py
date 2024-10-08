@@ -92,7 +92,10 @@ def main():
         threshold=5,
         normalize=True,
         return_classes=False,
-        limit=100
+        limit=0,
+        max_length=256,
+        max_seq_length=32,
+        mode='accept'
     ).get_test_examples(data_dir)
 
     test_dataset = OurDataset(
@@ -100,13 +103,10 @@ def main():
         tokenizer=tokenizer,
         data_pack=test_dp,
         mode='point',
-        num_dup=1,
-        num_neg=1,
-        batch_size=10,
+        batch_size=4,
         resample=False,
         shuffle=False,
-        sort=False,
-        max_length=512
+        max_length=256
     )
 
     test_dataloader = DataLoader(
