@@ -1,6 +1,11 @@
 # coding=utf-8
 # @Author: Fulai Cui (cuifulai@mail.hfut.edu.cn)
 # @Time: 2024/9/16 17:11
+"""
+Writing Train XML file: 100%|████████████████| 974/974 [00:03<00:00, 256.20it/s]
+Writing Dev XML file: 100%|██████████████████| 121/121 [00:00<00:00, 243.38it/s]
+Writing Test XML file: 100%|█████████████████| 123/123 [00:00<00:00, 256.65it/s]
+"""
 import re
 import xml.etree.ElementTree as ElementTree
 from typing import Optional
@@ -14,11 +19,13 @@ class Split:
     def __init__(
             self,
             data_name: str = 'meta.stackoverflow.com',
+            threshold: int = 5,
             limit: int = 0,
             split: Optional[list] = None,
             seed: int = 2024
     ):
         self.data_name = data_name
+        self.threshold = threshold
         self.limit = limit
         self.split = split
         self.seed = seed
@@ -26,7 +33,11 @@ class Split:
     def run(self):
         elems = []
         for elem in tqdm(self.iterparse(f'./{self.data_name}/{self.data_name}.xml', limit=self.limit), desc=f"Splitting {self.data_name} XML file"):
-            elems.append(elem)
+            # Question
+            question = elem.find('Question')
+            answer_count = question.attrib['ANSWER_COUNT']
+            if int(answer_count) >= self.threshold:
+                elems.append(elem)
 
         train_elems, temp_elems = train_test_split(elems, test_size=1-self.split[0], random_state=self.seed)
         val_elems, test_elems = train_test_split(temp_elems, test_size=self.split[2]/(1-self.split[0]), random_state=self.seed)
@@ -78,8 +89,9 @@ def main():
     data_name = 'meta.stackoverflow.com'
     limit = 0
     split = [0.8, 0.1, 0.1]
+    threshold = 5
 
-    Split(data_name, limit, split, seed).run()
+    Split(data_name, threshold, limit, split, seed).run()
 
 if __name__ == '__main__':
     main()
