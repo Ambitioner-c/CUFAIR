@@ -9,6 +9,8 @@ import math
 
 from transformers import set_seed
 
+from Model.Unit.modeling_bert import BertSelfAttention
+
 
 class SACILSTMCell(nn.Module):
     def __init__(
@@ -56,6 +58,7 @@ class SACILSTM(nn.Module):
             input_size: int,
             hidden_size: int,
             num_layers: int = 1,
+            num_attention_heads = 12,
             batch_first: bool = False,
     ):
         super(SACILSTM, self).__init__()
@@ -70,6 +73,9 @@ class SACILSTM(nn.Module):
         self.h = None
         self.c = None
 
+        self.self_attention = BertSelfAttention(hidden_size, num_attention_heads)
+        self.self_attention_layer = nn.Linear(hidden_size * 2, hidden_size)
+
     def forward(
             self,
             attention: Tensor,
@@ -77,7 +83,7 @@ class SACILSTM(nn.Module):
             ping: Tensor,
             init_states: Tuple[Tensor, Tensor]
     ) -> Tuple[Tensor, Tuple[Tensor, Tensor]]:
-        # Input and output size : (batch_size, seq_length, input_size)
+        # Input and output size: (batch_size, seq_length, input_size)
         # States size: (num_layers, batch_size, hidden_size)
         if self.batch_first:
             attention = attention.transpose(0, 1)
@@ -92,7 +98,8 @@ class SACILSTM(nn.Module):
         for i, cell in enumerate(self.net):  # Layers
             h_t, c_t = self.h[0, i].clone(), self.c[0, i].clone()
             for t in range(x.size(0)):  # Sequences
-                # TODO Reconstructing the inputs by pings
+                inputs = self.refactoring(inputs, ping, t, i).clone()
+
                 h_t, c_t = cell(attention[0], inputs[t], (h_t, c_t))
                 self.h[t, i], self.c[t, i] = h_t, c_t
             inputs = self.h[:, i].clone()
@@ -102,6 +109,22 @@ class SACILSTM(nn.Module):
 
         return self.h[:, -1], (self.h[-1], self.c[-1])
 
+    def refactoring(self, inputs: Tensor, pings: Tensor, t: int, i: int) -> Tensor:
+        # Input size: (seq_length, batch_size, input_size)
+        # Ping size: (batch_size, seq_length)
+        new_inputs = inputs.clone()
+        if t:
+            for batch, ping in enumerate(pings[:, t]):
+                ping = ping.item()
+                if ping:
+                    left = self.h[ping - 1, i, batch].clone()
+                    right = new_inputs[t, batch].clone()
+
+                    new_inputs[t, batch] = self.self_attention_layer(
+                        self.self_attention(torch.cat((left.unsqueeze(0), right.unsqueeze(0)), dim=0).unsqueeze(0))[0].squeeze(0).view(self.hidden_size * 2)
+                    ).clone()
+        return new_inputs
+
 
 class SACILSTMModel(nn.Module):
     def __init__(
@@ -110,16 +133,17 @@ class SACILSTMModel(nn.Module):
             input_size: int,
             hidden_size: int,
             num_layers: int,
-            output_size: int
+            output_size: int,
+            num_attention_heads: int,
     ):
         super(SACILSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.attentionlstm = SACILSTM(attention_size, input_size, hidden_size, num_layers, batch_first=True)
+        self.sacilstm = SACILSTM(attention_size, input_size, hidden_size, num_layers, num_attention_heads, batch_first=True)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, attention: Tensor, x: Tensor, ping: Tensor) -> Tensor:
-        out, _ = self.attentionlstm(attention, x, ping, None)
+        out, _ = self.sacilstm(attention, x, ping, None)
         out = self.fc(out)
 
         return out
@@ -130,7 +154,7 @@ def main():
 
     batch_size = 5
     seq_length = 3
-    input_size = 10
+    input_size = 12
     attentions = torch.randn(batch_size, 1, input_size)
     inputs = torch.randn(batch_size, seq_length, input_size)
     pings = torch.tensor(
@@ -141,10 +165,11 @@ def main():
         [0, 1, 0]]
     )
 
-    hidden_size = 5
+    hidden_size = 12
     num_layers = 2
     output_size = 5
-    model = SACILSTMModel(input_size, input_size, hidden_size, num_layers, output_size)
+    num_attention_heads = 12
+    model = SACILSTMModel(input_size, input_size, hidden_size, num_layers, output_size, num_attention_heads)
 
     outputs = model(attentions, inputs, pings)
     print(outputs.size())
