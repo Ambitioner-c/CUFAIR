@@ -10,14 +10,14 @@ import math
 from transformers import set_seed
 
 
-class AttentionLSTMCell(nn.Module):
+class SustainedAttentionLSTMCell(nn.Module):
     def __init__(
             self,
             attention_size: int,
             input_size: int,
             hidden_size: int
     ):
-        super(AttentionLSTMCell, self).__init__()
+        super(SustainedAttentionLSTMCell, self).__init__()
         self.attention_size = attention_size
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -49,7 +49,7 @@ class AttentionLSTMCell(nn.Module):
         return h, c
 
 
-class AttentionLSTM(nn.Module):
+class SustainedAttentionLSTM(nn.Module):
     def __init__(
             self,
             attention_size: int,
@@ -58,13 +58,13 @@ class AttentionLSTM(nn.Module):
             num_layers: int = 1,
             batch_first: bool = False,
     ):
-        super(AttentionLSTM, self).__init__()
+        super(SustainedAttentionLSTM, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.batch_first = batch_first
-        layers = [AttentionLSTMCell(attention_size, input_size, hidden_size)]
+        layers = [SustainedAttentionLSTMCell(attention_size, input_size, hidden_size)]
         for _ in range(self.num_layers - 1):
-            layers += [AttentionLSTMCell(attention_size, hidden_size, hidden_size)]
+            layers += [SustainedAttentionLSTMCell(attention_size, hidden_size, hidden_size)]
         self.net = nn.Sequential(*layers)
 
         self.h = None
@@ -101,7 +101,7 @@ class AttentionLSTM(nn.Module):
         return self.h[:, -1], (self.h[-1], self.c[-1])
 
 
-class AttentionLSTMModel(nn.Module):
+class SustainedAttentionLSTMModel(nn.Module):
     def __init__(
             self,
             attention_size: int,
@@ -110,10 +110,10 @@ class AttentionLSTMModel(nn.Module):
             num_layers: int,
             output_size: int
     ):
-        super(AttentionLSTMModel, self).__init__()
+        super(SustainedAttentionLSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.attentionlstm = AttentionLSTM(attention_size, input_size, hidden_size, num_layers, batch_first=True)
+        self.attentionlstm = SustainedAttentionLSTM(attention_size, input_size, hidden_size, num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, attention: Tensor, x: Tensor) -> Tensor:
@@ -135,7 +135,7 @@ def main():
     hidden_size = 5
     num_layers = 2
     output_size = 5
-    model = AttentionLSTMModel(input_size, input_size, hidden_size, num_layers, output_size)
+    model = SustainedAttentionLSTMModel(input_size, input_size, hidden_size, num_layers, output_size)
 
     outputs = model(attentions, inputs)
     print(outputs.size())

@@ -20,7 +20,7 @@ from Losses.RankHingeLoss import RankHingeLoss
 from Model.DataLoader.DataLoader import DataLoader
 from Model.DataLoader.DataProcessor import OurProcessor
 from Model.DataLoader.Dataset import OurDataset
-from Model.LSTM.AttentionLSTM import AttentionLSTMModel
+from Model.LSTM.SustainedAttentionLSTM import SustainedAttentionLSTMModel
 from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 
 from warnings import simplefilter
@@ -68,7 +68,7 @@ class OurModel(nn.Module):
 
         self.relevancy_layer = nn.Linear(hidden_size * 2, 20)
 
-        self.attention_lstm = AttentionLSTMModel(
+        self.attention_lstm = SustainedAttentionLSTMModel(
             attention_size=hidden_size,
             input_size=hidden_size,
             hidden_size=hidden_size,
