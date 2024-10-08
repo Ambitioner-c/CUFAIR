@@ -27,8 +27,11 @@ from warnings import simplefilter
 
 from Model.Unit.cprint import coloring, decoloring
 from Model.Unit.function import mkdir, save_args_to_file, ignore_warning
-from Model.Unit.metrics import precision, average_precision, mean_average_precision, mean_reciprocal_rank, \
-    discounted_cumulative_gain, normalized_discounted_cumulative_gain
+from Model.Unit.metrics import (
+    precision, average_precision, mean_average_precision, mean_reciprocal_rank,
+    discounted_cumulative_gain, normalized_discounted_cumulative_gain, accuracy_score, precision_score, recall_score,
+    f1_score, roc_auc_score
+)
 
 simplefilter(action='ignore', category=FutureWarning)
 simplefilter(action='ignore', category=UserWarning)
@@ -42,6 +45,7 @@ class OurModel(nn.Module):
             freeze: bool = False,
             pretrained_model_name_or_path: str = 'bert-base-uncased',
             device: torch.device = torch.device('cuda:0'),
+            num_labels: int = 2,
             hidden_size: int = 108,
             bert_hidden_size: int = 768,
             dropout_prob: float = 0.1,
@@ -74,7 +78,7 @@ class OurModel(nn.Module):
 
         self.credibility_layer = nn.Linear(hidden_size, 64)
 
-        self.usefulness_layer = nn.Linear(128, 1)
+        self.usefulness_layer = nn.Linear(128, num_labels)
 
         self.dropout = nn.Dropout(dropout_prob)
 
@@ -104,26 +108,9 @@ class OurModel(nn.Module):
         source_credibility = self.credibility_layer(source_credibility)                                             # torch.Size([batch_size, 64])
 
         usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
-        outputs = self.usefulness_layer(usefulness)                                                                  # torch.Size([batch_size, 1])
+        outputs = self.usefulness_layer(usefulness)                                                                 # torch.Size([batch_size, num_labels])
 
         return outputs
-
-
-def get_metrics(input: np.array, target: np.array, threshold: float = 0.) -> tuple:
-    p_1 = precision(input, target, k=1, threshold=threshold)
-    p_3 = precision(input, target, k=3, threshold=threshold)
-    p_5 = precision(input, target, k=5, threshold=threshold)
-    ap = average_precision(input, target, threshold=threshold)
-    map_ = mean_average_precision(input, target, threshold=threshold)
-    mrr = mean_reciprocal_rank(input, target, threshold=threshold)
-    dcg_1 = discounted_cumulative_gain(input, target, k=1, threshold=threshold)
-    dcg_3 = discounted_cumulative_gain(input, target, k=3, threshold=threshold)
-    dcg_5 = discounted_cumulative_gain(input, target, k=5, threshold=threshold)
-    ndcg_1 = normalized_discounted_cumulative_gain(input, target, k=1, threshold=threshold)
-    ndcg_3 = normalized_discounted_cumulative_gain(input, target, k=3, threshold=threshold)
-    ndcg_5 = normalized_discounted_cumulative_gain(input, target, k=5, threshold=threshold)
-
-    return (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5)
 
 
 def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, step):
@@ -146,6 +133,8 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
     best_model = None
     (best_p_1, best_p_3, best_p_5, best_ap, best_map), best_mrr, (best_dcg_1, best_dcg_3, best_dcg_5), (best_ndcg_1, best_ndcg_3, best_ndcg_5) = (
         (-1, -1, -1, -1, -1), -1, (-1, -1, -1), (-1, -1, -1))
+    best_acc, (best_pre, best_micro_pre, best_macro_pre), (best_rec, best_micro_rec, best_macro_rec), (best_f1, best_micro_f1, best_macro_f1), (best_auc, best_micro_auc, best_macro_auc) = (
+        -1, (-1, -1, -1), (-1, -1, -1), (-1, -1, -1), (-1, -1, -1))
 
     n = 0
     for epoch in range(epochs):
@@ -156,7 +145,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
 
             train_outputs = model(train_inputs)
 
-            train_loss = loss_function(y_pred=train_outputs)
+            train_loss = loss_function(train_outputs[:, 1].unsqueeze(1))
             train_loss.backward()
 
             optimizer.step()
@@ -174,14 +163,17 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
                     with torch.no_grad():
                         dev_outputs = model(dev_inputs).detach().cpu()
                         predictions.append(dev_outputs)
-                y_pred = torch.cat(predictions, dim=0).numpy().squeeze(axis=-1)
+                y_pred = torch.cat(predictions, dim=0).numpy()
                 y_true = dev_dataloader.label
                 id_left = dev_dataloader.id_left
                 (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5) = (
-                    eval_metric_on_data_frame(id_left, y_true, y_pred))
+                    eval_ranking_metrics_on_data_frame(id_left, y_true, y_pred[:, 1]))
+                acc, (pre, micro_pre, macro_pre), (rec, micro_rec, macro_rec), (f1, micro_f1, macro_f1), (auc, micro_auc, macro_auc) = (
+                    get_classification_metrics(y_pred, y_true))
                 temp_dev_result = (
                     f'{task_name}\t'
                     f'epoch/epochs:{epoch + 1}/{epochs}\t'
+                    f'Ranking:\t'
                     f'{coloring("p@1", "red_bg")}:{round(p_1, 4)}\t'
                     f'{coloring("p@3", "red_bg")}:{round(p_3, 4)}\t'
                     f'{coloring("p@5", "red_bg")}:{round(p_5, 4)}\t'
@@ -193,7 +185,21 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
                     f'dcg@5:{round(dcg_5, 4)}\t'
                     f'{coloring("ndcg@1", "purple_bg")}:{round(ndcg_1, 4)}\t'
                     f'{coloring("ndcg@3", "purple_bg")}:{round(ndcg_3, 4)}\t'
-                    f'{coloring("ndcg@5", "purple_bg")}:{round(ndcg_5, 4)}'
+                    f'{coloring("ndcg@5", "purple_bg")}:{round(ndcg_5, 4)}\t'
+                    f'Classification:\t'
+                    f'{coloring("acc", "red_bg")}:{round(acc, 4)}\t'
+                    f'{coloring("pre", "green_bg")}:{round(pre, 4)}\t'
+                    f'micro_pre:{round(micro_pre, 4)}\t'
+                    f'macro_pre:{round(macro_pre, 4)}\t'
+                    f'{coloring("rec", "yellow_bg")}:{round(rec, 4)}\t'
+                    f'micro_rec:{round(micro_rec, 4)}\t'
+                    f'macro_rec:{round(macro_rec, 4)}\t'
+                    f'{coloring("f1", "blue_bg")}:{round(f1, 4)}\t'
+                    f'micro_f1:{round(micro_f1, 4)}\t'
+                    f'macro_f1:{round(macro_f1, 4)}\t'
+                    f'{coloring("auc", "purple_bg")}:{round(auc, 4)}\t'
+                    f'micro_auc:{round(micro_auc, 4)}\t'
+                    f'macro_auc:{round(macro_auc, 4)}'
                 )
                 with open(mkdir(temp_dev_tsv), 'a' if os.path.exists(temp_dev_tsv) else 'w') as f:
                     f.write(decoloring(temp_dev_result) + '\n')
@@ -205,6 +211,11 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
                     best_mrr = mrr
                     best_dcg_1, best_dcg_3, best_dcg_5 = dcg_1, dcg_3, dcg_5
                     best_ndcg_1, best_ndcg_3, best_ndcg_5 = ndcg_1, ndcg_3, ndcg_5
+                    best_acc = acc
+                    best_pre, best_micro_pre, best_macro_pre = pre, micro_pre, macro_pre
+                    best_rec, best_micro_rec, best_macro_rec = rec, micro_rec, macro_rec
+                    best_f1, best_micro_f1, best_macro_f1 = f1, micro_f1, macro_f1
+                    best_auc, best_micro_auc, best_macro_auc = auc, micro_auc, macro_auc
                     best_model = copy.deepcopy(model)
             n += 1
 
@@ -222,7 +233,20 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
         f'best_dcg@5:{round(best_dcg_5, 4)}\t'
         f'{coloring("best_ndcg@1", "purple_bg")}:{round(best_ndcg_1, 4)}\t'
         f'{coloring("best_ndcg@3", "purple_bg")}:{round(best_ndcg_3, 4)}\t'
-        f'{coloring("best_ndcg@5", "purple_bg")}:{round(best_ndcg_5, 4)}'
+        f'{coloring("best_ndcg@5", "purple_bg")}:{round(best_ndcg_5, 4)}\t'
+        f'{coloring("best_acc", "red_bg")}:{round(best_acc, 4)}\t'
+        f'{coloring("best_pre", "green_bg")}:{round(best_pre, 4)}\t'
+        f'best_micro_pre:{round(best_micro_pre, 4)}\t'
+        f'best_macro_pre:{round(best_macro_pre, 4)}\t'
+        f'{coloring("best_rec", "yellow_bg")}:{round(best_rec, 4)}\t'
+        f'best_micro_rec:{round(best_micro_rec, 4)}\t'
+        f'best_macro_rec:{round(best_macro_rec, 4)}\t'
+        f'{coloring("best_f1", "blue_bg")}:{round(best_f1, 4)}\t'
+        f'best_micro_f1:{round(best_micro_f1, 4)}\t'
+        f'best_macro_f1:{round(best_macro_f1, 4)}\t'
+        f'{coloring("best_auc", "purple_bg")}:{round(best_auc, 4)}\t'
+        f'best_micro_auc:{round(best_micro_auc, 4)}\t'
+        f'best_macro_auc:{round(best_macro_auc, 4)}'
     )
     with open(mkdir(best_dev_tsv), 'a' if os.path.exists(best_dev_tsv) else 'w') as f:
         f.write(decoloring(best_dev_result) + '\n')
@@ -233,8 +257,42 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
 
     return best_model, timestamp
 
+def get_ranking_metrics(input: np.array, target: np.array, threshold: float = 0.) -> tuple:
+    p_1 = precision(input, target, k=1, threshold=threshold)
+    p_3 = precision(input, target, k=3, threshold=threshold)
+    p_5 = precision(input, target, k=5, threshold=threshold)
+    ap = average_precision(input, target, threshold=threshold)
+    map_ = mean_average_precision(input, target, threshold=threshold)
+    mrr = mean_reciprocal_rank(input, target, threshold=threshold)
+    dcg_1 = discounted_cumulative_gain(input, target, k=1, threshold=threshold)
+    dcg_3 = discounted_cumulative_gain(input, target, k=3, threshold=threshold)
+    dcg_5 = discounted_cumulative_gain(input, target, k=5, threshold=threshold)
+    ndcg_1 = normalized_discounted_cumulative_gain(input, target, k=1, threshold=threshold)
+    ndcg_3 = normalized_discounted_cumulative_gain(input, target, k=3, threshold=threshold)
+    ndcg_5 = normalized_discounted_cumulative_gain(input, target, k=5, threshold=threshold)
 
-def eval_metric_on_data_frame(
+    return (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5)
+
+
+def get_classification_metrics(input: np.array, target: np.array):
+    acc = accuracy_score(input, target)
+    pre = precision_score(input, target, average='weighted')
+    micro_pre = precision_score(input, target, average='micro')
+    macro_pre = precision_score(input, target, average='macro')
+    rec = recall_score(input, target, average='weighted')
+    micro_rec = recall_score(input, target, average='micro')
+    macro_rec = recall_score(input, target, average='macro')
+    f1 = f1_score(input, target, average='weighted')
+    micro_f1 = f1_score(input, target, average='micro')
+    macro_f1 = f1_score(input, target, average='macro')
+    auc = roc_auc_score(input, target, average='weighted')
+    micro_auc = roc_auc_score(input, target, average='micro')
+    macro_auc = roc_auc_score(input, target, average='macro')
+
+    return acc, (pre, micro_pre, macro_pre), (rec, micro_rec, macro_rec), (f1, micro_f1, macro_f1), (auc, micro_auc, macro_auc)
+
+
+def eval_ranking_metrics_on_data_frame(
         id_left: typing.Any,
         y_true: typing.Union[list, np.array],
         y_pred: typing.Union[list, np.array]
@@ -248,7 +306,7 @@ def eval_metric_on_data_frame(
     )
 
     metrics = df.groupby(by='id').apply(
-        lambda x: get_metrics(input=x['pred'].values, target=x['true'].values)
+        lambda x: get_ranking_metrics(input=x['pred'].values, target=x['true'].values)
     )
     p_1 = metrics.apply(lambda x: x[0][0]).mean()
     p_3 = metrics.apply(lambda x: x[0][1]).mean()
@@ -274,13 +332,16 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
         with torch.no_grad():
             test_outputs = model(test_inputs).detach().cpu()
             predictions.append(test_outputs)
-    y_pred = torch.cat(predictions, dim=0).numpy().squeeze(axis=-1)
+    y_pred = torch.cat(predictions, dim=0).numpy()
     y_true = test_dataloader.label
     id_left = test_dataloader.id_left
     (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5) = (
-        eval_metric_on_data_frame(id_left, y_true, y_pred))
+        eval_ranking_metrics_on_data_frame(id_left, y_true, y_pred[:, 1]))
+    acc, (pre, micro_pre, macro_pre), (rec, micro_rec, macro_rec), (f1, micro_f1, macro_f1), (auc, micro_auc, macro_auc) = (
+        get_classification_metrics(y_pred, y_true))
     best_test_result = (
         f'{task_name}\t'
+        f'Ranking:\t'
         f'{coloring("p@1", "red_bg")}:{round(p_1, 4)}\t'
         f'{coloring("p@3", "red_bg")}:{round(p_3, 4)}\t'
         f'{coloring("p@5", "red_bg")}:{round(p_5, 4)}\t'
@@ -292,7 +353,21 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
         f'dcg@5:{round(dcg_5, 4)}\t'
         f'{coloring("ndcg@1", "purple_bg")}:{round(ndcg_1, 4)}\t'
         f'{coloring("ndcg@3", "purple_bg")}:{round(ndcg_3, 4)}\t'
-        f'{coloring("ndcg@5", "purple_bg")}:{round(ndcg_5, 4)}'
+        f'{coloring("ndcg@5", "purple_bg")}:{round(ndcg_5, 4)}\t'
+        f'Classification:\t'
+        f'{coloring("acc", "red_bg")}:{round(acc, 4)}\t'
+        f'{coloring("pre", "green_bg")}:{round(pre, 4)}\t'
+        f'micro_pre:{round(micro_pre, 4)}\t'
+        f'macro_pre:{round(macro_pre, 4)}\t'
+        f'{coloring("rec", "yellow_bg")}:{round(rec, 4)}\t'
+        f'micro_rec:{round(micro_rec, 4)}\t'
+        f'macro_rec:{round(macro_rec, 4)}\t'
+        f'{coloring("f1", "blue_bg")}:{round(f1, 4)}\t'
+        f'micro_f1:{round(micro_f1, 4)}\t'
+        f'macro_f1:{round(macro_f1, 4)}\t'
+        f'{coloring("auc", "purple_bg")}:{round(auc, 4)}\t'
+        f'micro_auc:{round(micro_auc, 4)}\t'
+        f'macro_auc:{round(macro_auc, 4)}'
     )
     if args.is_train or save_test:
         best_test_tsv = f'./Result/Temp/{task_name}-{timestamp}/best_test.tsv'
@@ -302,8 +377,8 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Our Model')
-    parser.add_argument('--task_name', nargs='?', default='Our_model',
+    parser = argparse.ArgumentParser(description='Our Model without Community Interaction')
+    parser.add_argument('--task_name', nargs='?', default='OM_wo_CI',
                         help='Task name')
 
     parser.add_argument('--batch_size', type=int, default=4,
@@ -330,7 +405,7 @@ def parse_args():
                         help='Is from finetuned')
     parser.add_argument('--is_train', type=bool, default=True,
                         help='Is train')
-    parser.add_argument('--limit', nargs='?', default=[1600, 200, 200],
+    parser.add_argument('--limit', nargs='?', default=[800, 100, 100],
                         help='Limit')
     parser.add_argument('--lr', type=float, default=2e-5,
                         help='Learning rate')
@@ -385,7 +460,8 @@ def main():
             return_classes=False,
             limit=args.limit[0],
             max_length=args.max_length,
-            max_seq_length=args.max_seq_length
+            max_seq_length=args.max_seq_length,
+            mode='accept',
         ).get_train_examples(args.data_dir)
         train_dataset = OurDataset(
             argument_quality=argument_quality,
@@ -416,7 +492,8 @@ def main():
         return_classes=False,
         limit=args.limit[1],
         max_length=args.max_length,
-        max_seq_length=args.max_seq_length
+        max_seq_length=args.max_seq_length,
+        mode='accept',
     ).get_dev_examples(args.data_dir)
     test_dp = OurProcessor(
         data_name=args.data_name,
@@ -428,7 +505,8 @@ def main():
         return_classes=False,
         limit=args.limit[2],
         max_length=args.max_length,
-        max_seq_length=args.max_seq_length
+        max_seq_length=args.max_seq_length,
+        mode='accept',
     ).get_test_examples(args.data_dir)
 
     dev_dataset = OurDataset(
