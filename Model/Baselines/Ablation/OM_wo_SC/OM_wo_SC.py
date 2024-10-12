@@ -378,11 +378,11 @@ def parse_args():
                         help='Data directory')
     parser.add_argument('--data_name', nargs='?', default='meta.stackoverflow.com',
                         help='Data name')
-    parser.add_argument('--device', nargs='?', default='cuda:1',
+    parser.add_argument('--device', nargs='?', default='cuda:0',
                         help='Device')
     parser.add_argument('--dropout_prob', type=float, default=0.1,
                         help='Dropout probability')
-    parser.add_argument('--epochs', type=int, default=3,
+    parser.add_argument('--epochs', type=int, default=5,
                         help='Number of epochs')
     parser.add_argument('--finetuned_model_path', nargs='?', default='./FinetunedModel/Our_model-20241004_191930/best_model.pth',
                         help='Finetuned model path')
