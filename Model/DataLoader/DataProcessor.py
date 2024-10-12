@@ -116,6 +116,7 @@ class OurProcessor(DataProcessor, ABC):
         pass
 
     def create_examples(self, filepath: str) -> DataPack:
+        text_left_ids: list = []
         text_lefts: list = []
         text_right_ids: list = []
         text_rights: list = []
@@ -126,6 +127,7 @@ class OurProcessor(DataProcessor, ABC):
         features: list = []
 
         for _, elem in tqdm(self._iterparse(filepath + '.xml', self.limit), desc=f'Parsing {coloring(filepath, "red")} XML file'):
+            temp_text_left_ids = []
             temp_text_lefts = []
             temp_text_right_ids = []
             temp_text_rights = []
@@ -188,6 +190,7 @@ class OurProcessor(DataProcessor, ABC):
                     a_participants.append([])
                     a_pings.append([])
 
+                temp_text_left_ids.append(q_id)
                 temp_text_lefts.append(q_body)
                 temp_text_right_ids.append(a_ids[__])
                 temp_text_rights.append(a_bodys[__])
@@ -198,7 +201,7 @@ class OurProcessor(DataProcessor, ABC):
                 temp_comments.append(c_bodys[__])
                 temp_pings.append(a_pings[__])
 
-            assert len(temp_text_lefts) == len(temp_text_right_ids) == len(temp_text_rights) == len(temp_labels) == len(temp_comments) == len(temp_pings)
+            assert len(temp_text_left_ids) == len(temp_text_lefts) == len(temp_text_right_ids) == len(temp_text_rights) == len(temp_labels) == len(temp_comments) == len(temp_pings)
             if len(temp_labels) < self.threshold:
                 continue
 
@@ -234,6 +237,7 @@ class OurProcessor(DataProcessor, ABC):
             }
             temp_extends = [extend] * len(temp_labels)
 
+            text_left_ids.extend(temp_text_left_ids)
             text_lefts.extend(temp_text_lefts)
             text_right_ids.extend(temp_text_right_ids)
             text_rights.extend(temp_text_rights)
@@ -244,6 +248,7 @@ class OurProcessor(DataProcessor, ABC):
             features.extend([None] * len(temp_text_right_ids))
 
         df = pd.DataFrame({
+            'left_id': text_left_ids,
             'text_left': text_lefts,
             'right_id': text_right_ids,
             'text_right': text_rights,
@@ -262,8 +267,8 @@ class OurProcessor(DataProcessor, ABC):
 
     def pack(self, df: pd.DataFrame):
         # Gather IDs
-        id_left = self._gen_ids(df, 'text_left', 'L-')
-        id_right = self._gen_ids(df, 'text_right', 'R-')
+        id_left = self._gen_ids(df, 'left_id', 'L-')
+        id_right = self._gen_ids(df, 'right_id', 'R-')
 
         # Build Relation
         relation = pd.DataFrame(data={'id_left': id_left, 'id_right': id_right})
@@ -344,7 +349,7 @@ def main():
         max_seq_length=32,
         mode='accept',
     ).get_train_examples(data_dir)
-    pprint(train_dp.frame().head().to_dict())
+    pprint(train_dp.frame())
 
     dev_dp = OurProcessor(
         data_name=data_name,
