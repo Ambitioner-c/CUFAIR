@@ -90,7 +90,7 @@ class CILSTM(nn.Module):
         for i, cell in enumerate(self.net):  # Layers
             h_t, c_t = self.h[0, i].clone(), self.c[0, i].clone()
             for t in range(x.size(0)):  # Sequences
-                inputs = self.refactoring(inputs, ping, t, i).clone()
+                inputs = self.refactoring(inputs, ping, t).clone()
 
                 h_t, c_t = cell(inputs[t], (h_t, c_t))
                 self.h[t, i], self.c[t, i] = h_t, c_t
@@ -101,7 +101,7 @@ class CILSTM(nn.Module):
 
         return self.h[:, -1], (self.h[-1], self.c[-1])
 
-    def refactoring(self, inputs: Tensor, pings: Tensor, t: int, i: int) -> Tensor:
+    def refactoring(self, inputs: Tensor, pings: Tensor, t: int) -> Tensor:
         # Input size: (seq_length, batch_size, input_size)
         # Ping size: (batch_size, seq_length)
         new_inputs = inputs.clone()
@@ -109,7 +109,8 @@ class CILSTM(nn.Module):
             for batch, ping in enumerate(pings[:, t]):
                 ping = ping.item()
                 if ping:
-                    left = self.h[ping - 1, i, batch].clone()
+                    # left = self.h[ping - 1, i, batch].clone()
+                    left = new_inputs[ping - 1, batch].clone()
                     right = new_inputs[t, batch].clone()
 
                     new_inputs[t, batch] = self.self_attention_layer(
