@@ -33,10 +33,9 @@ class Split:
     def run(self):
         elems = []
         for elem in tqdm(self.iterparse(f'./{self.data_name}/{self.data_name}.xml', limit=self.limit), desc=f"Splitting {self.data_name} XML file"):
-            # Question
-            question = elem.find('Question')
-            answer_count = question.attrib['ANSWER_COUNT']
-            if int(answer_count) >= self.threshold:
+            # Answers
+            answers = elem.findall('Answer')
+            if len(answers) >= self.threshold:
                 elems.append(elem)
 
         train_elems, temp_elems = train_test_split(elems, test_size=1-self.split[0], random_state=self.seed)
