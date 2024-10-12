@@ -407,7 +407,7 @@ def parse_args():
                         help='Is from finetuned')
     parser.add_argument('--is_train', type=bool, default=True,
                         help='Is train')
-    parser.add_argument('--limit', nargs='?', default=[800, 100, 100],
+    parser.add_argument('--limit', nargs='?', default=[0, 0, 0],
                         help='Limit')
     parser.add_argument('--lr', type=float, default=2e-5,
                         help='Learning rate')
