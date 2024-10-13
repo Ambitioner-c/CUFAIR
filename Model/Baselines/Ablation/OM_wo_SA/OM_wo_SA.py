@@ -29,8 +29,7 @@ from Model.Unit.cprint import coloring, decoloring
 from Model.Unit.function import mkdir, save_args_to_file, ignore_warning
 from Model.Unit.metrics import (
     precision, average_precision, mean_average_precision, mean_reciprocal_rank,
-    discounted_cumulative_gain, normalized_discounted_cumulative_gain, accuracy_score, precision_score, recall_score,
-    f1_score, roc_auc_score
+    discounted_cumulative_gain, normalized_discounted_cumulative_gain
 )
 
 simplefilter(action='ignore', category=FutureWarning)
@@ -45,7 +44,6 @@ class OurModel(nn.Module):
             freeze: bool = False,
             pretrained_model_name_or_path: str = 'bert-base-uncased',
             device: torch.device = torch.device('cuda:0'),
-            num_labels: int = 2,
             hidden_size: int = 108,
             bert_hidden_size: int = 768,
             dropout_prob: float = 0.1,
@@ -79,7 +77,7 @@ class OurModel(nn.Module):
 
         self.credibility_layer = nn.Linear(hidden_size, 64)
 
-        self.usefulness_layer = nn.Linear(128, num_labels)
+        self.usefulness_layer = nn.Linear(128, 1)
 
         self.dropout = nn.Dropout(dropout_prob)
 
@@ -110,7 +108,7 @@ class OurModel(nn.Module):
         source_credibility = self.credibility_layer(source_credibility)                                             # torch.Size([batch_size, 64])
 
         usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
-        outputs = self.usefulness_layer(usefulness)                                                                 # torch.Size([batch_size, num_labels])
+        outputs = torch.sigmoid(self.usefulness_layer(usefulness))                                                  # torch.Size([batch_size, 1])
 
         return outputs
 
@@ -135,8 +133,6 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
     best_model = None
     (best_p_1, best_p_3, best_p_5, best_ap, best_map), best_mrr, (best_dcg_1, best_dcg_3, best_dcg_5), (best_ndcg_1, best_ndcg_3, best_ndcg_5) = (
         (-1, -1, -1, -1, -1), -1, (-1, -1, -1), (-1, -1, -1))
-    best_acc, (best_pre, best_micro_pre, best_macro_pre), (best_rec, best_micro_rec, best_macro_rec), (best_f1, best_micro_f1, best_macro_f1), (best_auc, best_micro_auc, best_macro_auc) = (
-        -1, (-1, -1, -1), (-1, -1, -1), (-1, -1, -1), (-1, -1, -1))
 
     n = 0
     for epoch in range(epochs):
@@ -147,7 +143,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
 
             train_outputs = model(train_inputs)
 
-            train_loss = loss_function(train_outputs[:, 1].unsqueeze(1))
+            train_loss = loss_function(train_outputs)
             train_loss.backward()
 
             optimizer.step()
@@ -169,9 +165,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
                 y_true = dev_dataloader.label
                 id_left = dev_dataloader.id_left
                 (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5) = (
-                    eval_ranking_metrics_on_data_frame(id_left, y_true, y_pred[:, 1]))
-                acc, (pre, micro_pre, macro_pre), (rec, micro_rec, macro_rec), (f1, micro_f1, macro_f1), (auc, micro_auc, macro_auc) = (
-                    get_classification_metrics(y_pred, y_true))
+                    eval_ranking_metrics_on_data_frame(id_left, y_true, y_pred.squeeze(axis=-1)))
                 temp_dev_result = (
                     f'{task_name}\t'
                     f'epoch/epochs:{epoch + 1}/{epochs}\t'
@@ -187,21 +181,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
                     f'dcg@5:{round(dcg_5, 4)}\t'
                     f'{coloring("ndcg@1", "purple_bg")}:{round(ndcg_1, 4)}\t'
                     f'{coloring("ndcg@3", "purple_bg")}:{round(ndcg_3, 4)}\t'
-                    f'{coloring("ndcg@5", "purple_bg")}:{round(ndcg_5, 4)}\t'
-                    f'Classification:\t'
-                    f'{coloring("acc", "red_bg")}:{round(acc, 4)}\t'
-                    f'{coloring("pre", "green_bg")}:{round(pre, 4)}\t'
-                    f'micro_pre:{round(micro_pre, 4)}\t'
-                    f'macro_pre:{round(macro_pre, 4)}\t'
-                    f'{coloring("rec", "yellow_bg")}:{round(rec, 4)}\t'
-                    f'micro_rec:{round(micro_rec, 4)}\t'
-                    f'macro_rec:{round(macro_rec, 4)}\t'
-                    f'{coloring("f1", "blue_bg")}:{round(f1, 4)}\t'
-                    f'micro_f1:{round(micro_f1, 4)}\t'
-                    f'macro_f1:{round(macro_f1, 4)}\t'
-                    f'{coloring("auc", "purple_bg")}:{round(auc, 4)}\t'
-                    f'micro_auc:{round(micro_auc, 4)}\t'
-                    f'macro_auc:{round(macro_auc, 4)}'
+                    f'{coloring("ndcg@5", "purple_bg")}:{round(ndcg_5, 4)}'
                 )
                 with open(mkdir(temp_dev_tsv), 'a' if os.path.exists(temp_dev_tsv) else 'w') as f:
                     f.write(decoloring(temp_dev_result) + '\n')
@@ -213,11 +193,6 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
                     best_mrr = mrr
                     best_dcg_1, best_dcg_3, best_dcg_5 = dcg_1, dcg_3, dcg_5
                     best_ndcg_1, best_ndcg_3, best_ndcg_5 = ndcg_1, ndcg_3, ndcg_5
-                    best_acc = acc
-                    best_pre, best_micro_pre, best_macro_pre = pre, micro_pre, macro_pre
-                    best_rec, best_micro_rec, best_macro_rec = rec, micro_rec, macro_rec
-                    best_f1, best_micro_f1, best_macro_f1 = f1, micro_f1, macro_f1
-                    best_auc, best_micro_auc, best_macro_auc = auc, micro_auc, macro_auc
                     best_model = copy.deepcopy(model)
             n += 1
 
@@ -235,20 +210,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
         f'best_dcg@5:{round(best_dcg_5, 4)}\t'
         f'{coloring("best_ndcg@1", "purple_bg")}:{round(best_ndcg_1, 4)}\t'
         f'{coloring("best_ndcg@3", "purple_bg")}:{round(best_ndcg_3, 4)}\t'
-        f'{coloring("best_ndcg@5", "purple_bg")}:{round(best_ndcg_5, 4)}\t'
-        f'{coloring("best_acc", "red_bg")}:{round(best_acc, 4)}\t'
-        f'{coloring("best_pre", "green_bg")}:{round(best_pre, 4)}\t'
-        f'best_micro_pre:{round(best_micro_pre, 4)}\t'
-        f'best_macro_pre:{round(best_macro_pre, 4)}\t'
-        f'{coloring("best_rec", "yellow_bg")}:{round(best_rec, 4)}\t'
-        f'best_micro_rec:{round(best_micro_rec, 4)}\t'
-        f'best_macro_rec:{round(best_macro_rec, 4)}\t'
-        f'{coloring("best_f1", "blue_bg")}:{round(best_f1, 4)}\t'
-        f'best_micro_f1:{round(best_micro_f1, 4)}\t'
-        f'best_macro_f1:{round(best_macro_f1, 4)}\t'
-        f'{coloring("best_auc", "purple_bg")}:{round(best_auc, 4)}\t'
-        f'best_micro_auc:{round(best_micro_auc, 4)}\t'
-        f'best_macro_auc:{round(best_macro_auc, 4)}'
+        f'{coloring("best_ndcg@5", "purple_bg")}:{round(best_ndcg_5, 4)}'
     )
     with open(mkdir(best_dev_tsv), 'a' if os.path.exists(best_dev_tsv) else 'w') as f:
         f.write(decoloring(best_dev_result) + '\n')
@@ -274,24 +236,6 @@ def get_ranking_metrics(input: np.array, target: np.array, threshold: float = 0.
     ndcg_5 = normalized_discounted_cumulative_gain(input, target, k=5, threshold=threshold)
 
     return (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5)
-
-
-def get_classification_metrics(input: np.array, target: np.array):
-    acc = accuracy_score(input, target)
-    pre = precision_score(input, target, average='weighted')
-    micro_pre = precision_score(input, target, average='micro')
-    macro_pre = precision_score(input, target, average='macro')
-    rec = recall_score(input, target, average='weighted')
-    micro_rec = recall_score(input, target, average='micro')
-    macro_rec = recall_score(input, target, average='macro')
-    f1 = f1_score(input, target, average='weighted')
-    micro_f1 = f1_score(input, target, average='micro')
-    macro_f1 = f1_score(input, target, average='macro')
-    auc = roc_auc_score(input, target, average='weighted')
-    micro_auc = roc_auc_score(input, target, average='micro')
-    macro_auc = roc_auc_score(input, target, average='macro')
-
-    return acc, (pre, micro_pre, macro_pre), (rec, micro_rec, macro_rec), (f1, micro_f1, macro_f1), (auc, micro_auc, macro_auc)
 
 
 def eval_ranking_metrics_on_data_frame(
@@ -338,9 +282,7 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
     y_true = test_dataloader.label
     id_left = test_dataloader.id_left
     (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5) = (
-        eval_ranking_metrics_on_data_frame(id_left, y_true, y_pred[:, 1]))
-    acc, (pre, micro_pre, macro_pre), (rec, micro_rec, macro_rec), (f1, micro_f1, macro_f1), (auc, micro_auc, macro_auc) = (
-        get_classification_metrics(y_pred, y_true))
+        eval_ranking_metrics_on_data_frame(id_left, y_true, y_pred.squeeze(axis=-1)))
     best_test_result = (
         f'{task_name}\t'
         f'Ranking:\t'
@@ -355,28 +297,14 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
         f'dcg@5:{round(dcg_5, 4)}\t'
         f'{coloring("ndcg@1", "purple_bg")}:{round(ndcg_1, 4)}\t'
         f'{coloring("ndcg@3", "purple_bg")}:{round(ndcg_3, 4)}\t'
-        f'{coloring("ndcg@5", "purple_bg")}:{round(ndcg_5, 4)}\t'
-        f'Classification:\t'
-        f'{coloring("acc", "red_bg")}:{round(acc, 4)}\t'
-        f'{coloring("pre", "green_bg")}:{round(pre, 4)}\t'
-        f'micro_pre:{round(micro_pre, 4)}\t'
-        f'macro_pre:{round(macro_pre, 4)}\t'
-        f'{coloring("rec", "yellow_bg")}:{round(rec, 4)}\t'
-        f'micro_rec:{round(micro_rec, 4)}\t'
-        f'macro_rec:{round(macro_rec, 4)}\t'
-        f'{coloring("f1", "blue_bg")}:{round(f1, 4)}\t'
-        f'micro_f1:{round(micro_f1, 4)}\t'
-        f'macro_f1:{round(macro_f1, 4)}\t'
-        f'{coloring("auc", "purple_bg")}:{round(auc, 4)}\t'
-        f'micro_auc:{round(micro_auc, 4)}\t'
-        f'macro_auc:{round(macro_auc, 4)}'
+        f'{coloring("ndcg@5", "purple_bg")}:{round(ndcg_5, 4)}'
     )
     if args.is_train or save_test:
         best_test_tsv = f'./Result/Temp/{task_name}-{timestamp}/best_test.tsv'
         with open(mkdir(best_test_tsv), 'a' if os.path.exists(best_test_tsv) else 'w') as f:
             f.write(decoloring(best_test_result) + '\n')
     print(best_test_result)
-    print(f'{p_1}\t{p_3}\t{p_5}\t{ap}\t{map_}\t{mrr}\t{dcg_1}\t{dcg_3}\t{dcg_5}\t{ndcg_1}\t{ndcg_3}\t{ndcg_5}\t{acc}\t{pre}\t{micro_pre}\t{macro_pre}\t{rec}\t{micro_rec}\t{macro_rec}\t{f1}\t{micro_f1}\t{macro_f1}\t{auc}\t{micro_auc}\t{macro_auc}')
+    print(f'{p_1}\t{p_3}\t{p_5}\t{ap}\t{map_}\t{mrr}\t{dcg_1}\t{dcg_3}\t{dcg_5}\t{ndcg_1}\t{ndcg_3}\t{ndcg_5}')
 
 
 def parse_args():
