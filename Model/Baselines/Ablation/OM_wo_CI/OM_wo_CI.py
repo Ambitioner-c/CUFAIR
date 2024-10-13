@@ -374,6 +374,7 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
         with open(mkdir(best_test_tsv), 'a' if os.path.exists(best_test_tsv) else 'w') as f:
             f.write(decoloring(best_test_result) + '\n')
     print(best_test_result)
+    print(f'{p_1}\t{p_3}\t{p_5}\t{ap}\t{map_}\t{mrr}\t{dcg_1}\t{dcg_3}\t{dcg_5}\t{ndcg_1}\t{ndcg_3}\t{ndcg_5}\t{acc}\t{pre}\t{micro_pre}\t{macro_pre}\t{rec}\t{micro_rec}\t{macro_rec}\t{f1}\t{micro_f1}\t{macro_f1}\t{auc}\t{micro_auc}\t{macro_auc}')
 
 
 def parse_args():
