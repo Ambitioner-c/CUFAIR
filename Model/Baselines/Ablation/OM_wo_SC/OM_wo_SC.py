@@ -95,7 +95,7 @@ class OurModel(nn.Module):
             torch.cat([bert_output_left, bert_output_right], dim=-1))                        # torch.Size([batch_size, 20])
         argument_quality = torch.cat([relevancy, feature], dim=-1)                           # torch.Size([batch_size, 64])
 
-        outputs = torch.sigmoid(self.argument_quality_layer(argument_quality))                      # torch.Size([batch_size, 1])
+        outputs = self.argument_quality_layer(argument_quality)                      # torch.Size([batch_size, 1])
 
         return outputs
 
