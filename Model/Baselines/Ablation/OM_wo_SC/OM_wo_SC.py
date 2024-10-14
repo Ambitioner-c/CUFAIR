@@ -48,6 +48,7 @@ class OurModel(nn.Module):
             bert_hidden_size: int = 768,
             dropout_prob: float = 0.1,
             num_layers: int = 1,
+            num_labels: int = 2,
     ):
         super(OurModel, self).__init__()
         self.device = device
@@ -76,7 +77,7 @@ class OurModel(nn.Module):
 
         self.credibility_layer = nn.Linear(hidden_size, 64)
 
-        self.argument_quality_layer = nn.Linear(64, 1)
+        self.argument_quality_layer = nn.Linear(64, num_labels)
 
         self.dropout = nn.Dropout(dropout_prob)
 
@@ -95,7 +96,7 @@ class OurModel(nn.Module):
             torch.cat([bert_output_left, bert_output_right], dim=-1))                        # torch.Size([batch_size, 20])
         argument_quality = torch.cat([relevancy, feature], dim=-1)                           # torch.Size([batch_size, 64])
 
-        outputs = self.argument_quality_layer(argument_quality)                      # torch.Size([batch_size, 1])
+        outputs = self.argument_quality_layer(argument_quality)[:, 1].unsqueeze(1)                  # torch.Size([batch_size, 1])
 
         return outputs
 

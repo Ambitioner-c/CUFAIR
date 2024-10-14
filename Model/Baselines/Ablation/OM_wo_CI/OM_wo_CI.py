@@ -48,6 +48,7 @@ class OurModel(nn.Module):
             bert_hidden_size: int = 768,
             dropout_prob: float = 0.1,
             num_layers: int = 1,
+            num_labels: int = 2,
     ):
         super(OurModel, self).__init__()
         self.device = device
@@ -76,7 +77,7 @@ class OurModel(nn.Module):
 
         self.credibility_layer = nn.Linear(hidden_size, 64)
 
-        self.usefulness_layer = nn.Linear(128, 1)
+        self.usefulness_layer = nn.Linear(128, num_labels)
 
         self.dropout = nn.Dropout(dropout_prob)
 
@@ -106,7 +107,7 @@ class OurModel(nn.Module):
         source_credibility = self.credibility_layer(source_credibility)                                             # torch.Size([batch_size, 64])
 
         usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
-        outputs = self.usefulness_layer(usefulness)                                                        # torch.Size([batch_size, 1])
+        outputs = self.usefulness_layer(usefulness)[:, 1].unsqueeze(1)                                              # torch.Size([batch_size, 1])
 
         return outputs
 
