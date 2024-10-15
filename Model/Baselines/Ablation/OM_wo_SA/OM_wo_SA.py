@@ -275,7 +275,6 @@ def eval_ranking_metrics_on_data_frame(
 
 
 def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
-    model.eval()
     predictions = []
     for test_sample in test_dataloader:
         test_inputs, _ = test_sample
