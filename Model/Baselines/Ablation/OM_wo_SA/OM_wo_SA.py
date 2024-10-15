@@ -88,7 +88,10 @@ class OurModel(nn.Module):
         comment = torch.stack([x.to(self.device) for x in inputs['comment']], dim=0)                # torch.Size([batch_size, max_sequence_length, max_length])
         ping = torch.stack([x.to(self.device) for x in inputs['ping']], dim=0)                      # torch.Size([batch_size, max_sequence_length])
         feature = torch.stack([torch.tensor(x).to(self.device) for x in inputs['feature']], dim=0)  # torch.Size([batch_size, 44])
-        feature = self.feature_norm(feature)                                                        # torch.Size([batch_size, 44])
+        try:
+            feature = self.feature_norm(feature)                                                        # torch.Size([batch_size, 44])
+        except ValueError:
+            feature = feature
 
         bert_output_left = self.reduction_layer(self.bert(text_left)['pooler_output'])              # torch.Size([batch_size, hidden_size])
         bert_output_right = self.reduction_layer(self.bert(text_right)['pooler_output'])            # torch.Size([batch_size, hidden_size])
@@ -329,6 +332,8 @@ def parse_args():
                         help='Number of epochs')
     parser.add_argument('--finetuned_model_path', nargs='?', default='./FinetunedModel/Our_model-20241004_191930/best_model.pth',
                         help='Finetuned model path')
+    parser.add_argument('--fold', type=int, default=1,
+                        help='Fold')
     parser.add_argument('--freeze', type=bool, default=False,
                         help='Freeze')
     parser.add_argument('--hidden_size', type=int, default=108,
@@ -394,6 +399,7 @@ def main():
             max_length=args.max_length,
             max_seq_length=args.max_seq_length,
             mode='accept',
+            fold=args.fold,
         ).get_train_examples(args.data_dir)
         train_dataset = OurDataset(
             argument_quality=argument_quality,
@@ -414,19 +420,6 @@ def main():
     else:
         train_dataloader = None
 
-    dev_dp = OurProcessor(
-        data_name=args.data_name,
-        stage='dev',
-        task='ranking',
-        filtered=True,
-        threshold=args.threshold,
-        normalize=args.normalize,
-        return_classes=False,
-        limit=args.limit[1],
-        max_length=args.max_length,
-        max_seq_length=args.max_seq_length,
-        mode='accept',
-    ).get_dev_examples(args.data_dir)
     test_dp = OurProcessor(
         data_name=args.data_name,
         stage='test',
@@ -439,18 +432,9 @@ def main():
         max_length=args.max_length,
         max_seq_length=args.max_seq_length,
         mode='accept',
+        fold=args.fold,
     ).get_test_examples(args.data_dir)
 
-    dev_dataset = OurDataset(
-        argument_quality=argument_quality,
-        tokenizer=tokenizer,
-        data_pack=dev_dp,
-        mode='point',
-        batch_size=args.batch_size,
-        resample=False,
-        shuffle=False,
-        max_length=args.max_length
-    )
     test_dataset = OurDataset(
         argument_quality=argument_quality,
         tokenizer=tokenizer,
@@ -462,10 +446,6 @@ def main():
         max_length=args.max_length
     )
 
-    dev_dataloader = DataLoader(
-        dev_dataset,
-        stage='dev'
-    )
     test_dataloader = DataLoader(
         test_dataset,
         stage='test'
@@ -488,7 +468,7 @@ def main():
     if args.is_from_finetuned:
         model.load_state_dict(torch.load(args.finetuned_model_path))
     if args.is_train:
-        model, timestamp = train(args, args.task_name, model, train_dataloader, dev_dataloader, args.epochs, args.lr, args.step)
+        model, timestamp = train(args, args.task_name, model, train_dataloader, test_dataloader, args.epochs, args.lr, args.step)
 
     evaluate(args, args.task_name, model, test_dataloader, timestamp, args.save_test)
 
