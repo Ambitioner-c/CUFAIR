@@ -2,51 +2,55 @@
 # @Author: Fulai Cui (cuifulai@mail.hfut.edu.cn)
 # @Time: 2024/9/9 19:36
 """
-Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Train/train XML file: 974it [00:01, 954.31it/s]
-     id_left  ... feature
-0        L-0  ...    None
-1        L-0  ...    None
-2        L-0  ...    None
-3        L-0  ...    None
-4        L-0  ...    None
-...      ...  ...     ...
-6444   L-746  ...    None
-6445   L-746  ...    None
-6446   L-746  ...    None
-6447   L-746  ...    None
-6448   L-746  ...    None
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Train/train_1_fold XML file: 832it [00:01, 808.15it/s]
+train_1_fold (7221, 10)
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Test/test_1_fold XML file: 93it [00:00, 607.60it/s]
+test_1_fold (253, 10)
 
-[6449 rows x 10 columns]
-Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Dev/dev XML file: 121it [00:00, 762.90it/s]
-    id_left  ... feature
-0       L-0  ...    None
-1       L-0  ...    None
-2       L-0  ...    None
-3       L-0  ...    None
-4       L-0  ...    None
-..      ...  ...     ...
-320    L-45  ...    None
-321    L-45  ...    None
-322    L-45  ...    None
-323    L-45  ...    None
-324    L-45  ...    None
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Train/train_2_fold XML file: 832it [00:01, 800.33it/s]
+train_2_fold (7156, 10)
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Test/test_2_fold XML file: 93it [00:00, 497.07it/s]
+test_2_fold (293, 10)
 
-[325 rows x 10 columns]
-Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Test/test XML file: 123it [00:00, 740.05it/s]
-    id_left  ... feature
-0       L-0  ...    None
-1       L-0  ...    None
-2       L-0  ...    None
-3       L-0  ...    None
-4       L-0  ...    None
-..      ...  ...     ...
-290    L-42  ...    None
-291    L-42  ...    None
-292    L-42  ...    None
-293    L-42  ...    None
-294    L-42  ...    None
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Train/train_3_fold XML file: 832it [00:01, 762.91it/s]
+train_3_fold (7188, 10)
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Test/test_3_fold XML file: 93it [00:00, 466.34it/s]
+test_3_fold (340, 10)
 
-[295 rows x 10 columns]
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Train/train_4_fold XML file: 832it [00:00, 832.05it/s]
+train_4_fold (6956, 10)
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Test/test_4_fold XML file: 93it [00:00, 504.21it/s]
+test_4_fold (283, 10)
+
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Train/train_5_fold XML file: 832it [00:01, 754.74it/s]
+train_5_fold (7292, 10)
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Test/test_5_fold XML file: 93it [00:00, 427.45it/s]
+test_5_fold (303, 10)
+
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Train/train_6_fold XML file: 833it [00:01, 811.51it/s]
+train_6_fold (7117, 10)
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Test/test_6_fold XML file: 92it [00:00, 474.67it/s]
+test_6_fold (264, 10)
+
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Train/train_7_fold XML file: 833it [00:01, 763.99it/s]
+train_7_fold (6911, 10)
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Test/test_7_fold XML file: 92it [00:00, 377.65it/s]
+test_7_fold (274, 10)
+
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Train/train_8_fold XML file: 833it [00:01, 776.96it/s]
+train_8_fold (7316, 10)
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Test/test_8_fold XML file: 92it [00:00, 525.06it/s]
+test_8_fold (263, 10)
+
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Train/train_9_fold XML file: 833it [00:01, 804.40it/s]
+train_9_fold (7233, 10)
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Test/test_9_fold XML file: 92it [00:00, 505.05it/s]
+test_9_fold (301, 10)
+
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Train/train_10_fold XML file: 833it [00:01, 805.68it/s]
+train_10_fold (7232, 10)
+Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Test/test_10_fold XML file: 92it [00:00, 505.46it/s]
+test_10_fold (227, 10)
 """
 import os
 import typing
@@ -54,7 +58,6 @@ from typing import Optional
 from abc import ABC
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
-from pprint import pprint
 
 import numpy as np
 import pandas as pd
@@ -83,6 +86,7 @@ class OurProcessor(DataProcessor, ABC):
             max_length: int = 256,
             max_seq_length: int = 32,
             mode: Optional[str] = 'accept',
+            fold: int = 1,
     ):
         super(OurProcessor).__init__()
 
@@ -99,18 +103,16 @@ class OurProcessor(DataProcessor, ABC):
         self.max_length = max_length
         self.max_seq_length = max_seq_length
         self.mode = mode
+        self.fold = fold
 
     def get_all_examples(self, data_dir: str) -> DataPack:
         return self.create_examples(os.path.join(data_dir, self.data_name, self.data_name))
 
     def get_train_examples(self, data_dir: str) -> DataPack:
-        return self.create_examples(os.path.join(data_dir, self.data_name, 'Train', 'train'))
-
-    def get_dev_examples(self, data_dir: str) -> DataPack:
-        return self.create_examples(os.path.join(data_dir, self.data_name, 'Dev', 'dev'))
+        return self.create_examples(os.path.join(data_dir, self.data_name, 'Train', f'train_{self.fold}_fold'))
 
     def get_test_examples(self, data_dir: str) -> DataPack:
-        return self.create_examples(os.path.join(data_dir, self.data_name, 'Test', 'test'))
+        return self.create_examples(os.path.join(data_dir, self.data_name, 'Test', f'test_{self.fold}_fold'))
 
     def get_labels(self):
         pass
@@ -336,6 +338,8 @@ def main():
     data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
     data_name = 'meta.stackoverflow.com'
 
+    fold = 10
+
     train_dp = OurProcessor(
         data_name=data_name,
         stage='train',
@@ -348,23 +352,9 @@ def main():
         max_length=256,
         max_seq_length=32,
         mode='accept',
+        fold=fold,
     ).get_train_examples(data_dir)
-    pprint(train_dp.frame())
-
-    dev_dp = OurProcessor(
-        data_name=data_name,
-        stage='dev',
-        task='ranking',
-        filtered=True,
-        threshold=5,
-        normalize=True,
-        return_classes=False,
-        limit=0,
-        max_length=256,
-        max_seq_length=32,
-        mode='accept',
-    ).get_dev_examples(data_dir)
-    print(dev_dp.frame())
+    print(f'train_{fold}_fold', train_dp.frame().shape)
 
     test_dp = OurProcessor(
         data_name=data_name,
@@ -378,8 +368,9 @@ def main():
         max_length=256,
         max_seq_length=32,
         mode='accept',
+        fold=fold,
     ).get_test_examples(data_dir)
-    print(test_dp.frame())
+    print(f'test_{fold}_fold', test_dp.frame().shape)
 
 
 if __name__ == '__main__':
