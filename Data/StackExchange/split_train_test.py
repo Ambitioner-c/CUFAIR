@@ -2,16 +2,32 @@
 # @Author: Fulai Cui (cuifulai@mail.hfut.edu.cn)
 # @Time: 2024/9/16 17:11
 """
-Writing Train XML file: 100%|████████████████| 974/974 [00:03<00:00, 256.20it/s]
-Writing Dev XML file: 100%|██████████████████| 121/121 [00:00<00:00, 243.38it/s]
-Writing Test XML file: 100%|█████████████████| 123/123 [00:00<00:00, 256.65it/s]
+Writing train_1_fold XML file: 100%|█████████| 832/832 [00:03<00:00, 223.36it/s]
+Writing test_1_fold XML file: 100%|████████████| 93/93 [00:00<00:00, 227.16it/s]
+Writing train_2_fold XML file: 100%|█████████| 832/832 [00:03<00:00, 209.12it/s]
+Writing test_2_fold XML file: 100%|████████████| 93/93 [00:00<00:00, 208.01it/s]
+Writing train_3_fold XML file: 100%|█████████| 832/832 [00:04<00:00, 206.89it/s]
+Writing test_3_fold XML file: 100%|████████████| 93/93 [00:00<00:00, 212.21it/s]
+Writing train_4_fold XML file: 100%|█████████| 832/832 [00:04<00:00, 202.86it/s]
+Writing test_4_fold XML file: 100%|████████████| 93/93 [00:00<00:00, 222.16it/s]
+Writing train_5_fold XML file: 100%|█████████| 832/832 [00:04<00:00, 203.40it/s]
+Writing test_5_fold XML file: 100%|████████████| 93/93 [00:00<00:00, 227.22it/s]
+Writing train_6_fold XML file: 100%|█████████| 833/833 [00:03<00:00, 210.08it/s]
+Writing test_6_fold XML file: 100%|████████████| 92/92 [00:00<00:00, 210.13it/s]
+Writing train_7_fold XML file: 100%|█████████| 833/833 [00:03<00:00, 212.22it/s]
+Writing test_7_fold XML file: 100%|████████████| 92/92 [00:00<00:00, 156.05it/s]
+Writing train_8_fold XML file: 100%|█████████| 833/833 [00:04<00:00, 206.35it/s]
+Writing test_8_fold XML file: 100%|████████████| 92/92 [00:00<00:00, 249.40it/s]
+Writing train_9_fold XML file: 100%|█████████| 833/833 [00:03<00:00, 210.95it/s]
+Writing test_9_fold XML file: 100%|████████████| 92/92 [00:00<00:00, 237.41it/s]
+Writing train_10_fold XML file: 100%|████████| 833/833 [00:04<00:00, 203.98it/s]
+Writing test_10_fold XML file: 100%|███████████| 92/92 [00:00<00:00, 232.51it/s]
 """
 import re
 import xml.etree.ElementTree as ElementTree
-from typing import Optional
 import xml.dom.minidom as minidom
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold
 from tqdm import tqdm
 
 
@@ -21,13 +37,13 @@ class Split:
             data_name: str = 'meta.stackoverflow.com',
             threshold: int = 5,
             limit: int = 0,
-            split: Optional[list] = None,
+            kf: KFold = None,
             seed: int = 2024
     ):
         self.data_name = data_name
         self.threshold = threshold
         self.limit = limit
-        self.split = split
+        self.kf = kf
         self.seed = seed
 
     def run(self):
@@ -38,15 +54,15 @@ class Split:
             if len(answers) >= self.threshold:
                 elems.append(elem)
 
-        train_elems, temp_elems = train_test_split(elems, test_size=1-self.split[0], random_state=self.seed)
-        val_elems, test_elems = train_test_split(temp_elems, test_size=self.split[2]/(1-self.split[0]), random_state=self.seed)
+        for i, (train_index, test_index) in enumerate(self.kf.split(elems)):
+            train_elems = [elems[j] for j in train_index]
+            test_elems = [elems[j] for j in test_index]
 
-        self.write_file(train_elems, 'Train')
-        self.write_file(val_elems, 'Dev')
-        self.write_file(test_elems, 'Test')
+            self.write_file(train_elems, 'Train', i)
+            self.write_file(test_elems, 'Test', i)
 
-    def write_file(self, elems: list, mode: str):
-        for thread in tqdm(elems, desc=f"Writing {mode} XML file"):
+    def write_file(self, elems: list, mode: str, fold: int):
+        for thread in tqdm(elems, desc=f"Writing {mode.lower()}_{fold+1}_fold XML file"):
             string = (re.sub(
                 r'> *\n +', '>', minidom.parseString(
                     ElementTree.tostring(thread, encoding='utf-8', method='html')
@@ -57,7 +73,7 @@ class Split:
                       replace('\n            \n', '\n').
                       replace('\n                \n', '\n'))
 
-            with open(f"./{self.data_name}/{mode}/{mode.lower()}.xml", 'a', encoding='utf-8') as f:
+            with open(f"./{self.data_name}/{mode}/{mode.lower()}_{fold+1}_fold.xml", 'a', encoding='utf-8') as f:
                 f.write(string)
 
     @staticmethod
@@ -87,10 +103,14 @@ def main():
 
     data_name = 'meta.stackoverflow.com'
     limit = 0
-    split = [0.8, 0.1, 0.1]
     threshold = 5
 
-    Split(data_name, threshold, limit, split, seed).run()
+    n_splits = 10
+    shuffle = True
+
+    kf = KFold(n_splits=n_splits, shuffle=shuffle, random_state=seed)
+
+    Split(data_name, threshold, limit, kf, seed).run()
 
 if __name__ == '__main__':
     main()
