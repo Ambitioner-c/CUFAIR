@@ -80,7 +80,8 @@ class RSTModel(nn.Module):
             pretrained_model_name_or_path: str = 'bert-base-uncased',
             device: torch.device= torch.device('cuda:0'),
             num_labels: int = 3,
-            hidden_size: int = 768,
+            hidden_size: int = 108,
+            bert_hidden_size: int = 768,
             num_attention_heads: int = 12,
             dropout_prob: float = 0.1
     ):
@@ -95,34 +96,35 @@ class RSTModel(nn.Module):
             for p in self.bert.parameters():
                 p.requires_grad = False
 
+        self.reduction_layer = nn.Linear(bert_hidden_size, hidden_size)
+
         self.self_attention = BertSelfAttention(
             hidden_size,
             num_attention_heads,
             dropout_prob
         )
+        self.self_attention_layer = nn.Linear(hidden_size * 2, hidden_size)
 
         self.dropout = nn.Dropout(dropout_prob)
 
-        self.classifier = nn.Linear(hidden_size * 2, num_labels)
+        self.classifier = nn.Linear(hidden_size, num_labels)
 
     def forward(self, sample: pd.DataFrame):
         x_left = sample['left'].to(self.device)
         x_right = sample['right'].to(self.device)
 
-        left_init = self.dropout(
-            self.bert(x_left)['pooler_output']
-        )
-        right_init = self.dropout(
-            self.bert(x_right)['pooler_output']
+        left_init = self.reduction_layer(self.bert(x_left)['pooler_output'])
+        right_init = self.reduction_layer(self.bert(x_right)['pooler_output'])
+
+        left_right = self.self_attention_layer(
+            torch.flatten(
+                self.self_attention(
+                    torch.stack([left_init, right_init], dim=1)
+                )[0], start_dim=1
+            )
         )
 
-        left_right = self.dropout(
-            self.self_attention(
-                torch.stack([left_init, right_init], dim=1)
-            )[0]
-        )
-
-        outputs = self.classifier(torch.flatten(left_right, start_dim=1))
+        outputs = self.classifier(left_right)
 
         return outputs
 
@@ -172,6 +174,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
     best_dev_tsv = f'./Result/Temp/{task_name}-{timestamp}/best_dev.tsv'
     finetuned_model_path = f'./FinetunedModel/{task_name}-{timestamp}/best_model.pth'
     finetuned_bert_model_path = f'./FinetunedModel/{task_name}-{timestamp}/bert-base-uncased'
+    finetuned_self_attention_model_path = f'./FinetunedModel/{task_name}-{timestamp}/self_attention.pth'
 
     save_args_to_file(args, mkdir(args_path))
 
@@ -272,6 +275,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
             n += 1
 
     torch.save(best_model.state_dict(), mkdir(finetuned_model_path))
+    torch.save(best_model.self_attention.state_dict(), mkdir(finetuned_self_attention_model_path))
     best_model.bert.save_pretrained(mkdir(finetuned_bert_model_path))
     best_dev_result = (
         f'{coloring("best_loss", "red_bg")}:{best_loss}\t'
@@ -363,8 +367,10 @@ def parse_args():
                         help='Number of epochs')
     parser.add_argument('--batch_size', type=int, default=128,
                         help='Batch size')
-    parser.add_argument('--hidden_size', type=int, default=768,
+    parser.add_argument('--hidden_size', type=int, default=108,
                         help='Hidden size')
+    parser.add_argument('--bert_hidden_size', type=int, default=768,
+                        help='BERT hidden size')
     parser.add_argument('--num_attention_heads', type=int, default=12,
                         help='Number of attention heads')
     parser.add_argument('--dropout_prob', type=float, default=0.1,
@@ -416,6 +422,7 @@ def main():
         device=device,
         num_labels=args.num_labels,
         hidden_size=args.hidden_size,
+        bert_hidden_size=args.bert_hidden_size,
         num_attention_heads=args.num_attention_heads,
         dropout_prob=args.dropout_prob
     ).to(device)
