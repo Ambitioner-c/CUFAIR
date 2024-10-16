@@ -332,6 +332,8 @@ def parse_args():
                         help='Number of epochs')
     parser.add_argument('--finetuned_model_path', nargs='?', default='./FinetunedModel/Our_model-20241004_191930/best_model.pth',
                         help='Finetuned model path')
+    parser.add_argument('--finetuned_self_attention_model_path', nargs='?', default='../Baselines/Ablation/RST/FinetunedModel/RST_based_classifier-20241015_212539/self_attention.pth',
+                        help='Finetuned self attention model path')
     parser.add_argument('--fold', type=int, default=1,
                         help='Fold')
     parser.add_argument('--freeze', type=bool, default=False,
@@ -463,6 +465,7 @@ def main():
         num_layers=args.num_layers,
         num_attention_heads=args.num_attention_heads,
     ).to(device)
+    model.sacilstm.sacilstm.self_attention.load_state_dict(torch.load(args.finetuned_self_attention_model_path))
 
     timestamp = None
     if args.is_from_finetuned:
