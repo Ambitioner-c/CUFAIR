@@ -466,6 +466,7 @@ def main():
         num_attention_heads=args.num_attention_heads,
     ).to(device)
     model.sacilstm.sacilstm.self_attention.load_state_dict(torch.load(args.finetuned_self_attention_model_path))
+    model.sacilstm.sacilstm.self_attention.to(device)
 
     timestamp = None
     if args.is_from_finetuned:
