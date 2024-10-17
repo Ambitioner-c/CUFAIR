@@ -17,7 +17,8 @@ class SACILSTMCell(nn.Module):
             self,
             attention_size: int,
             input_size: int,
-            hidden_size: int
+            hidden_size: int,
+            is_peephole: bool = False,
     ):
         super(SACILSTMCell, self).__init__()
         self.attention_size = attention_size
@@ -31,6 +32,8 @@ class SACILSTMCell(nn.Module):
         self.bias_hh = nn.Parameter(Tensor(hidden_size * 4))
         self.init_parameters()
 
+        self.is_peephole = is_peephole
+
     def init_parameters(self):
         stdv = 1.0 / math.sqrt(self.hidden_size)
         for weight in self.parameters():
@@ -43,7 +46,11 @@ class SACILSTMCell(nn.Module):
             init_states: Tuple[Tensor, Tensor]
     ) -> Tuple[Tensor, Tensor]:
         h_t_minus_1, c_t_minus_1 = init_states
-        gates = torch.mm(attention, self.weight_ah) + self.bias_ah + torch.mm(x, self.weight_ih) + self.bias_ih + torch.mm(h_t_minus_1, self.weight_hh) + self.bias_hh
+
+        temp = torch.mm(attention, self.weight_ah) + self.bias_ah
+        if self.is_peephole:
+            temp[:, self.hidden_size * 2: self.hidden_size * 3] = 0
+        gates = temp + torch.mm(x, self.weight_ih) + self.bias_ih + torch.mm(h_t_minus_1, self.weight_hh) + self.bias_hh
         input_gate, forget_gate, cell, output_gate = gates.chunk(4, dim=1)
         c = torch.sigmoid(forget_gate) * c_t_minus_1 + torch.sigmoid(input_gate) * torch.tanh(cell)
         h = torch.sigmoid(output_gate) * torch.tanh(c)
@@ -60,14 +67,15 @@ class SACILSTM(nn.Module):
             num_layers: int = 1,
             num_attention_heads = 12,
             batch_first: bool = False,
+            is_peephole: bool = False,
     ):
         super(SACILSTM, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.batch_first = batch_first
-        layers = [SACILSTMCell(attention_size, input_size, hidden_size)]
+        layers = [SACILSTMCell(attention_size, input_size, hidden_size, is_peephole)]
         for _ in range(self.num_layers - 1):
-            layers += [SACILSTMCell(attention_size, hidden_size, hidden_size)]
+            layers += [SACILSTMCell(attention_size, hidden_size, hidden_size, is_peephole)]
         self.net = nn.Sequential(*layers)
 
         self.h = None
@@ -136,11 +144,12 @@ class SACILSTMModel(nn.Module):
             num_layers: int,
             output_size: int,
             num_attention_heads: int,
+            is_peephole: bool,
     ):
         super(SACILSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.sacilstm = SACILSTM(attention_size, input_size, hidden_size, num_layers, num_attention_heads, batch_first=True)
+        self.sacilstm = SACILSTM(attention_size, input_size, hidden_size, num_layers, num_attention_heads, batch_first=True, is_peephole=is_peephole)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, attention: Tensor, x: Tensor, ping: Tensor) -> Tensor:
@@ -170,7 +179,8 @@ def main():
     num_layers = 2
     output_size = 5
     num_attention_heads = 12
-    model = SACILSTMModel(input_size, input_size, hidden_size, num_layers, output_size, num_attention_heads)
+    is_peephole = True
+    model = SACILSTMModel(input_size, input_size, hidden_size, num_layers, output_size, num_attention_heads, is_peephole)
 
     outputs = model(attentions, inputs, pings)
     print(outputs.size())
