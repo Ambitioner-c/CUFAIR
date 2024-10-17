@@ -82,7 +82,6 @@ class SACILSTM(nn.Module):
         self.c = None
 
         self.self_attention = BertSelfAttention(hidden_size, num_attention_heads)
-        self.self_attention_layer = nn.Linear(hidden_size * 2, hidden_size)
 
     def forward(
             self,
@@ -129,9 +128,9 @@ class SACILSTM(nn.Module):
                     left = new_inputs[ping - 1, batch].clone()
                     right = new_inputs[t, batch].clone()
 
-                    new_inputs[t, batch] = self.self_attention_layer(
-                        self.self_attention(torch.cat((left.unsqueeze(0), right.unsqueeze(0)), dim=0).unsqueeze(0))[0].squeeze(0).view(self.hidden_size * 2)
-                    ).clone()
+                    new_inputs[t, batch] = self.self_attention(
+                        torch.cat((left.unsqueeze(0), right.unsqueeze(0)), dim=0).unsqueeze(0)
+                    )[0].squeeze(0)[-1].clone()
         return new_inputs
 
 
