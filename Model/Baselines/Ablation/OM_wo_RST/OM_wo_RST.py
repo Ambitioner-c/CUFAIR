@@ -50,6 +50,7 @@ class OurModel(nn.Module):
             num_layers: int = 1,
             num_attention_heads: int = 12,
             num_labels: int = 2,
+            is_peephole: bool = False,
     ):
         super(OurModel, self).__init__()
         self.device = device
@@ -75,6 +76,7 @@ class OurModel(nn.Module):
             num_layers=num_layers,
             output_size=hidden_size,
             num_attention_heads=num_attention_heads,
+            is_peephole=is_peephole,
         )
 
         self.credibility_layer = nn.Linear(hidden_size, 64)
@@ -340,6 +342,8 @@ def parse_args():
                         help='Hidden size')
     parser.add_argument('--is_from_finetuned', type=bool, default=False,
                         help='Is from finetuned')
+    parser.add_argument('--is_peephole', type=bool, default=True,
+                        help='Is peephole')
     parser.add_argument('--is_train', type=bool, default=True,
                         help='Is train')
     parser.add_argument('--limit', nargs='?', default=[0, 0, 0],
@@ -462,6 +466,7 @@ def main():
         dropout_prob=args.dropout_prob,
         num_layers=args.num_layers,
         num_attention_heads=args.num_attention_heads,
+        is_peephole=args.is_peephole,
     ).to(device)
 
     timestamp = None
