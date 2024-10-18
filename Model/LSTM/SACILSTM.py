@@ -68,6 +68,7 @@ class SACILSTM(nn.Module):
             num_attention_heads = 12,
             batch_first: bool = False,
             is_peephole: bool = False,
+            ci_mode: str = 'all',
     ):
         super(SACILSTM, self).__init__()
         self.hidden_size = hidden_size
@@ -82,6 +83,10 @@ class SACILSTM(nn.Module):
         self.c = None
 
         self.self_attention = BertSelfAttention(hidden_size, num_attention_heads)
+        if ci_mode == 'all':
+            self.self_attention_layer = nn.Linear(hidden_size * 2, hidden_size)
+
+        self.ci_mode = ci_mode
 
     def forward(
             self,
@@ -128,9 +133,21 @@ class SACILSTM(nn.Module):
                     left = new_inputs[ping - 1, batch].clone()
                     right = new_inputs[t, batch].clone()
 
-                    new_inputs[t, batch] = self.self_attention(
-                        torch.cat((left.unsqueeze(0), right.unsqueeze(0)), dim=0).unsqueeze(0)
-                    )[0].squeeze(0)[-1].clone()
+                    if self.ci_mode == 'left':
+                        new_inputs[t, batch] = self.self_attention(
+                            torch.cat((left.unsqueeze(0), right.unsqueeze(0)), dim=0).unsqueeze(0)
+                        )[0].squeeze(0)[0].clone()
+                    elif self.ci_mode == 'right':
+                        new_inputs[t, batch] = self.self_attention(
+                            torch.cat((left.unsqueeze(0), right.unsqueeze(0)), dim=0).unsqueeze(0)
+                        )[0].squeeze(0)[1].clone()
+                    elif self.ci_mode == 'all':
+                        new_inputs[t, batch] = self.self_attention_layer(
+                            self.self_attention(
+                                torch.cat((left.unsqueeze(0), right.unsqueeze(0)), dim=0).unsqueeze(0)
+                            )[0].squeeze(0).view(self.hidden_size * 2)
+                        ).clone()
+
         return new_inputs
 
 
@@ -144,11 +161,12 @@ class SACILSTMModel(nn.Module):
             output_size: int,
             num_attention_heads: int,
             is_peephole: bool,
+            ci_mode: str,
     ):
         super(SACILSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.sacilstm = SACILSTM(attention_size, input_size, hidden_size, num_layers, num_attention_heads, batch_first=True, is_peephole=is_peephole)
+        self.sacilstm = SACILSTM(attention_size, input_size, hidden_size, num_layers, num_attention_heads, batch_first=True, is_peephole=is_peephole, ci_mode=ci_mode)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, attention: Tensor, x: Tensor, ping: Tensor) -> Tensor:
@@ -178,9 +196,9 @@ def main():
     num_layers = 2
     output_size = 5
     num_attention_heads = 12
-    is_peephole = True
-    model = SACILSTMModel(input_size, input_size, hidden_size, num_layers, output_size, num_attention_heads, is_peephole)
-
+    is_peephole = False
+    ci_mode = 'all'
+    model = SACILSTMModel(input_size, input_size, hidden_size, num_layers, output_size, num_attention_heads, is_peephole, ci_mode)
     outputs = model(attentions, inputs, pings)
     print(outputs.size())
 

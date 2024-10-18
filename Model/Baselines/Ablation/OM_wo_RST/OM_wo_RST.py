@@ -51,6 +51,7 @@ class OurModel(nn.Module):
             num_attention_heads: int = 12,
             num_labels: int = 2,
             is_peephole: bool = False,
+            ci_mode: str = 'all',
     ):
         super(OurModel, self).__init__()
         self.device = device
@@ -77,6 +78,7 @@ class OurModel(nn.Module):
             output_size=hidden_size,
             num_attention_heads=num_attention_heads,
             is_peephole=is_peephole,
+            ci_mode=ci_mode,
         )
 
         self.credibility_layer = nn.Linear(hidden_size, 64)
@@ -322,6 +324,8 @@ def parse_args():
                         help='Batch size')
     parser.add_argument('--bert_hidden_size', type=int, default=768,
                         help='Bert hidden size')
+    parser.add_argument('--ci_mode', nargs='?', default='all',
+                        help='CI Mode')
     parser.add_argument('--data_dir', nargs='?', default='/home/cuifulai/Projects/CQA/Data/StackExchange',
                         help='Data directory')
     parser.add_argument('--data_name', nargs='?', default='meta.stackoverflow.com',
@@ -342,7 +346,7 @@ def parse_args():
                         help='Hidden size')
     parser.add_argument('--is_from_finetuned', type=bool, default=False,
                         help='Is from finetuned')
-    parser.add_argument('--is_peephole', type=bool, default=True,
+    parser.add_argument('--is_peephole', type=bool, default=False,
                         help='Is peephole')
     parser.add_argument('--is_train', type=bool, default=True,
                         help='Is train')
@@ -467,6 +471,7 @@ def main():
         num_layers=args.num_layers,
         num_attention_heads=args.num_attention_heads,
         is_peephole=args.is_peephole,
+        ci_mode=args.ci_mode,
     ).to(device)
 
     timestamp = None

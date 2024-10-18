@@ -54,6 +54,7 @@ class CILSTM(nn.Module):
             num_layers: int = 1,
             num_attention_heads = 12,
             batch_first: bool = False,
+            ci_mode: str = 'all',
     ):
         super(CILSTM, self).__init__()
         self.hidden_size = hidden_size
@@ -68,6 +69,10 @@ class CILSTM(nn.Module):
         self.c = None
 
         self.self_attention = BertSelfAttention(hidden_size, num_attention_heads)
+        if ci_mode == 'all':
+            self.self_attention_layer = nn.Linear(hidden_size * 2, hidden_size)
+
+        self.ci_mode = ci_mode
 
     def forward(
             self,
@@ -112,9 +117,21 @@ class CILSTM(nn.Module):
                     left = new_inputs[ping - 1, batch].clone()
                     right = new_inputs[t, batch].clone()
 
-                    new_inputs[t, batch] = self.self_attention(
-                        torch.cat((left.unsqueeze(0), right.unsqueeze(0)), dim=0).unsqueeze(0)
-                    )[0].squeeze(0)[-1].clone()
+                    if self.ci_mode == 'left':
+                        new_inputs[t, batch] = self.self_attention(
+                            torch.cat((left.unsqueeze(0), right.unsqueeze(0)), dim=0).unsqueeze(0)
+                        )[0].squeeze(0)[0].clone()
+                    elif self.ci_mode == 'right':
+                        new_inputs[t, batch] = self.self_attention(
+                            torch.cat((left.unsqueeze(0), right.unsqueeze(0)), dim=0).unsqueeze(0)
+                        )[0].squeeze(0)[1].clone()
+                    elif self.ci_mode == 'all':
+                        new_inputs[t, batch] = self.self_attention_layer(
+                            self.self_attention(
+                                torch.cat((left.unsqueeze(0), right.unsqueeze(0)), dim=0).unsqueeze(0)
+                            )[0].squeeze(0).view(self.hidden_size * 2)
+                        ).clone()
+
         return new_inputs
 
 
@@ -126,11 +143,12 @@ class CILSTMModel(nn.Module):
             num_layers: int,
             output_size: int,
             num_attention_heads: int,
+            ci_mode: str,
     ):
         super(CILSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.cilstm = CILSTM(input_size, hidden_size, num_layers, num_attention_heads, batch_first=True)
+        self.cilstm = CILSTM(input_size, hidden_size, num_layers, num_attention_heads, batch_first=True, ci_mode=ci_mode)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, x: Tensor, ping: Tensor) -> Tensor:
@@ -159,7 +177,8 @@ def main():
     num_layers = 2
     output_size = 5
     num_attention_heads = 12
-    model = CILSTMModel(input_size, hidden_size, num_layers, output_size, num_attention_heads)
+    ci_mode = 'all'
+    model = CILSTMModel(input_size, hidden_size, num_layers, output_size, num_attention_heads, ci_mode)
 
     outputs = model(inputs, pings)
     print(outputs.size())
