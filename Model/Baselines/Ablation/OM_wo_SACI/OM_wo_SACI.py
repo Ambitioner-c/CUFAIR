@@ -20,7 +20,7 @@ from Model.Losses.RankHingeLoss import RankHingeLoss
 from Model.DataLoader.DataLoader import DataLoader
 from Model.DataLoader.DataProcessor import OurProcessor
 from Model.DataLoader.Dataset import OurDataset
-from Model.LSTM.SACILSTM import SACILSTMModel
+from Model.LSTM.LSTM import LSTMModel
 from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 
 from warnings import simplefilter
@@ -48,10 +48,7 @@ class OurModel(nn.Module):
             bert_hidden_size: int = 768,
             dropout_prob: float = 0.1,
             num_layers: int = 1,
-            num_attention_heads: int = 12,
             num_labels: int = 2,
-            is_peephole: bool = False,
-            ci_mode: str = 'all',
     ):
         super(OurModel, self).__init__()
         self.device = device
@@ -70,15 +67,11 @@ class OurModel(nn.Module):
 
         self.relevancy_layer = nn.Linear(hidden_size * 2, 20)
 
-        self.sacilstm = SACILSTMModel(
-            attention_size=hidden_size,
+        self.lstm = LSTMModel(
             input_size=hidden_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
             output_size=hidden_size,
-            num_attention_heads=num_attention_heads,
-            is_peephole=is_peephole,
-            ci_mode=ci_mode,
         )
 
         self.credibility_layer = nn.Linear(hidden_size, 64)
@@ -91,7 +84,6 @@ class OurModel(nn.Module):
         text_left = torch.stack([x.to(self.device) for x in inputs['text_left']], dim=0)            # torch.Size([batch_size, max_length])
         text_right = torch.stack([x.to(self.device) for x in inputs['text_right']], dim=0)          # torch.Size([batch_size, max_length])
         comment = torch.stack([x.to(self.device) for x in inputs['comment']], dim=0)                # torch.Size([batch_size, max_sequence_length, max_length])
-        ping = torch.stack([x.to(self.device) for x in inputs['ping']], dim=0)                      # torch.Size([batch_size, max_sequence_length])
         feature = torch.stack([torch.tensor(x).to(self.device) for x in inputs['feature']], dim=0)  # torch.Size([batch_size, 44])
         try:
             feature = self.feature_norm(feature)                                                        # torch.Size([batch_size, 44])
@@ -113,7 +105,7 @@ class OurModel(nn.Module):
         argument_quality = torch.cat([relevancy, feature], dim=-1)                           # torch.Size([batch_size, 64])
 
         # SC
-        source_credibility = self.sacilstm(bert_output_right.unsqueeze(1), bert_output_comment, ping)[:, -1, :]     # torch.Size([batch_size, hidden_size])
+        source_credibility = self.lstm(bert_output_comment)[:, -1, :]                                               # torch.Size([batch_size, hidden_size])
         source_credibility = self.credibility_layer(source_credibility)                                             # torch.Size([batch_size, 64])
 
         usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
@@ -330,7 +322,7 @@ def parse_args():
                         help='Data directory')
     parser.add_argument('--data_name', nargs='?', default='meta.stackoverflow.com',
                         help='Data name')
-    parser.add_argument('--device', nargs='?', default='cuda:1',
+    parser.add_argument('--device', nargs='?', default='cuda:0',
                         help='Device')
     parser.add_argument('--dropout_prob', type=float, default=0.1,
                         help='Dropout probability')
@@ -469,9 +461,6 @@ def main():
         bert_hidden_size=args.bert_hidden_size,
         dropout_prob=args.dropout_prob,
         num_layers=args.num_layers,
-        num_attention_heads=args.num_attention_heads,
-        is_peephole=args.is_peephole,
-        ci_mode=args.ci_mode,
     ).to(device)
 
     timestamp = None
