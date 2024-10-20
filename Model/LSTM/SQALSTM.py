@@ -9,8 +9,6 @@ import math
 
 from transformers import set_seed
 
-from Model.Unit.modeling_bert import BertSelfAttention
-
 
 class SQALSTMCell(nn.Module):
     def __init__(
