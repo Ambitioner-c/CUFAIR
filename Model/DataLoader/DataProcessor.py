@@ -87,6 +87,7 @@ class OurProcessor(DataProcessor, ABC):
             max_seq_length: int = 32,
             mode: Optional[str] = 'accept',
             fold: int = 1,
+            min_seq_length: int = 1,
     ):
         super(OurProcessor).__init__()
 
@@ -104,6 +105,7 @@ class OurProcessor(DataProcessor, ABC):
         self.max_seq_length = max_seq_length
         self.mode = mode
         self.fold = fold
+        self.min_seq_length = min_seq_length
 
     def get_all_examples(self, data_dir: str) -> DataPack:
         return self.create_examples(os.path.join(data_dir, self.data_name, self.data_name))
@@ -291,7 +293,7 @@ class OurProcessor(DataProcessor, ABC):
         extend = self._merge(df, id_left, 'extend', 'id_left')
         feature = self._merge(df, id_right, 'feature', 'id_right')
 
-        return DataPack(relation, left, right_id, right, comment, ping, extend, feature, self.max_length, self.max_seq_length)
+        return DataPack(relation, left, right_id, right, comment, ping, extend, feature, self.max_length, self.max_seq_length, self.min_seq_length)
 
     @staticmethod
     def _merge(data: pd.DataFrame, ids: typing.Union[list, np.array], text_label: str, id_label: str):

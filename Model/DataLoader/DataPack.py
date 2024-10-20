@@ -35,6 +35,7 @@ class DataPack:
             feature: pd.DataFrame,
             max_length: int,
             max_seq_length: int,
+            min_seq_length: int = 1,
     ):
         self._relation = relation
         self._left = left
@@ -46,6 +47,7 @@ class DataPack:
         self._feature = feature
         self._max_length = max_length
         self._max_seq_length = max_seq_length
+        self._min_seq_length = min_seq_length
 
     @property
     def has_label(self) -> bool:
@@ -70,7 +72,7 @@ class DataPack:
 
         x = frame[columns].to_dict(orient='list')
 
-        max_seq_length = max(max([len(comment) if comment is not None else 0 for comment in x['comment']]), 1)
+        max_seq_length = max(max([len(comment) if comment is not None else 0 for comment in x['comment']]), self._min_seq_length)
 
         for key, val in x.items():
             if key == 'comment':
@@ -120,7 +122,8 @@ class DataPack:
             extend=extend.copy(),
             feature=feature.copy(),
             max_length=self._max_length,
-            max_seq_length=self._max_seq_length
+            max_seq_length=self._max_seq_length,
+            min_seq_length=self._min_seq_length,
         )
 
     @property
@@ -182,7 +185,8 @@ class DataPack:
             extend=self._extend.copy(),
             feature=self._feature.copy(),
             max_length=self._max_length,
-            max_seq_length=self._max_seq_length
+            max_seq_length=self._max_seq_length,
+            min_seq_length=self._min_seq_length,
         )
 
     @staticmethod
