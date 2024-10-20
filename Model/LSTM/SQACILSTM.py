@@ -12,7 +12,7 @@ from transformers import set_seed
 from Model.Unit.modeling_bert import BertSelfAttention
 
 
-class SACILSTMCell(nn.Module):
+class SQACILSTMCell(nn.Module):
     def __init__(
             self,
             question_size: int,
@@ -21,7 +21,7 @@ class SACILSTMCell(nn.Module):
             hidden_size: int,
             is_peephole: bool = False,
     ):
-        super(SACILSTMCell, self).__init__()
+        super(SQACILSTMCell, self).__init__()
         self.question_size = question_size
         self.answer_size = answer_size
         self.input_size = input_size
@@ -65,7 +65,7 @@ class SACILSTMCell(nn.Module):
         return h, c
 
 
-class SACILSTM(nn.Module):
+class SQACILSTM(nn.Module):
     def __init__(
             self,
             question_size: int,
@@ -78,13 +78,13 @@ class SACILSTM(nn.Module):
             is_peephole: bool = False,
             ci_mode: str = 'all',
     ):
-        super(SACILSTM, self).__init__()
+        super(SQACILSTM, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.batch_first = batch_first
-        layers = [SACILSTMCell(question_size, answer_size, input_size, hidden_size, is_peephole)]
+        layers = [SQACILSTMCell(question_size, answer_size, input_size, hidden_size, is_peephole)]
         for _ in range(self.num_layers - 1):
-            layers += [SACILSTMCell(question_size, answer_size, hidden_size, hidden_size, is_peephole)]
+            layers += [SQACILSTMCell(question_size, answer_size, hidden_size, hidden_size, is_peephole)]
         self.net = nn.Sequential(*layers)
 
         self.h = None
@@ -161,7 +161,7 @@ class SACILSTM(nn.Module):
         return new_inputs
 
 
-class SACILSTMModel(nn.Module):
+class SQACILSTMModel(nn.Module):
     def __init__(
             self,
             question_size: int,
@@ -174,14 +174,14 @@ class SACILSTMModel(nn.Module):
             is_peephole: bool,
             ci_mode: str,
     ):
-        super(SACILSTMModel, self).__init__()
+        super(SQACILSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.sacilstm = SACILSTM(question_size, answer_size, input_size, hidden_size, num_layers, num_attention_heads, batch_first=True, is_peephole=is_peephole, ci_mode=ci_mode)
+        self.sqacilstm = SQACILSTM(question_size, answer_size, input_size, hidden_size, num_layers, num_attention_heads, batch_first=True, is_peephole=is_peephole, ci_mode=ci_mode)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, question: Tensor, answer: Tensor, x: Tensor, ping: Tensor) -> Tensor:
-        out, _ = self.sacilstm(question, answer, x, ping, None)
+        out, _ = self.sqacilstm(question, answer, x, ping, None)
         out = self.fc(out)
 
         return out
@@ -210,7 +210,7 @@ def main():
     num_attention_heads = 12
     is_peephole = False
     ci_mode = 'all'
-    model = SACILSTMModel(input_size, input_size, input_size, hidden_size, num_layers, output_size, num_attention_heads, is_peephole, ci_mode)
+    model = SQACILSTMModel(input_size, input_size, input_size, hidden_size, num_layers, output_size, num_attention_heads, is_peephole, ci_mode)
     outputs = model(questions, answers, inputs, pings)
     print(outputs.size())
 
