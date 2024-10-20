@@ -20,7 +20,7 @@ from Model.Losses.RankHingeLoss import RankHingeLoss
 from Model.DataLoader.DataLoader import DataLoader
 from Model.DataLoader.DataProcessor import OurProcessor
 from Model.DataLoader.Dataset import OurDataset
-from Model.LSTM.SACILSTM import SACILSTMModel
+from Model.LSTM.BiLSTM import BiLSTMModel
 from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 
 from warnings import simplefilter
@@ -38,7 +38,7 @@ simplefilter(action='ignore', category=DeprecationWarning)
 ignore_warning(name="transformers")
 
 
-class OurModel(nn.Module):
+class RAHPModel(nn.Module):
     def __init__(
             self,
             freeze: bool = False,
@@ -53,7 +53,7 @@ class OurModel(nn.Module):
             is_peephole: bool = False,
             ci_mode: str = 'all',
     ):
-        super(OurModel, self).__init__()
+        super(RAHPModel, self).__init__()
         self.device = device
 
         self.bert = BertModel.from_pretrained(pretrained_model_name_or_path)
@@ -66,60 +66,99 @@ class OurModel(nn.Module):
 
         self.reduction_layer = nn.Linear(bert_hidden_size, hidden_size)
 
-        self.feature_norm = nn.BatchNorm1d(44)
+        self.bilstm_qa = BiLSTMModel(
+            input_size=hidden_size * 2,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            output_size=hidden_size,
+        )
 
-        self.relevancy_layer = nn.Linear(hidden_size * 2, 20)
-
-        self.sacilstm = SACILSTMModel(
-            attention_size=hidden_size,
+        self.bilstm_ra = BiLSTMModel(
             input_size=hidden_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
             output_size=hidden_size,
-            num_attention_heads=num_attention_heads,
-            is_peephole=is_peephole,
-            ci_mode=ci_mode,
         )
 
-        self.credibility_layer = nn.Linear(hidden_size, 64)
+        self.mlp_qa_layer = nn.Linear(hidden_size * 2, hidden_size)
 
-        self.usefulness_layer = nn.Linear(128, num_labels)
+        self.mlp_ra_layer = nn.Linear(hidden_size * 2, hidden_size)
 
-        self.dropout = nn.Dropout(dropout_prob)
+        self.mlp_p_layer = nn.Linear(hidden_size * 2, num_labels)
 
     def forward(self, inputs: dict):
         text_left = torch.stack([x.to(self.device) for x in inputs['text_left']], dim=0)            # torch.Size([batch_size, max_length])
         text_right = torch.stack([x.to(self.device) for x in inputs['text_right']], dim=0)          # torch.Size([batch_size, max_length])
         comment = torch.stack([x.to(self.device) for x in inputs['comment']], dim=0)                # torch.Size([batch_size, max_sequence_length, max_length])
-        ping = torch.stack([x.to(self.device) for x in inputs['ping']], dim=0)                      # torch.Size([batch_size, max_sequence_length])
-        feature = torch.stack([torch.tensor(x).to(self.device) for x in inputs['feature']], dim=0)  # torch.Size([batch_size, 44])
-        try:
-            feature = self.feature_norm(feature)                                                        # torch.Size([batch_size, 44])
-        except ValueError:
-            feature = feature
 
-        bert_output_left = self.reduction_layer(self.bert(text_left)['pooler_output'])              # torch.Size([batch_size, hidden_size])
-        bert_output_right = self.reduction_layer(self.bert(text_right)['pooler_output'])            # torch.Size([batch_size, hidden_size])
+        bert_output_left = self.reduction_layer(self.bert(text_left)['last_hidden_state'])          # torch.Size([batch_size, max_length, hidden_size])
+        bert_output_right = self.reduction_layer(self.bert(text_right)['last_hidden_state'])        # torch.Size([batch_size, max_length, hidden_size])
 
         bert_output_comment = []
         for j in range(len(comment)):
-            bert_output_comment.append(self.reduction_layer(self.bert(comment[j])['pooler_output']))
-        bert_output_comment = torch.stack(bert_output_comment, dim=0)                               # torch.Size([batch_size, max_sequence_length, hidden_size])
+            bert_output_comment.append(self.reduction_layer(self.bert(comment[j])['last_hidden_state']))
+        bert_output_comment = torch.stack(bert_output_comment, dim=0)                               # torch.Size([batch_size, max_sequence_length, max_length, hidden_size])
 
-        # AQ
-        # Relevancy
-        relevancy = self.relevancy_layer(
-            torch.cat([bert_output_left, bert_output_right], dim=-1))                        # torch.Size([batch_size, 20])
-        argument_quality = torch.cat([relevancy, feature], dim=-1)                           # torch.Size([batch_size, 64])
+        # QA Interaction Modeling
+        n_aq, n_qa = self.dual_attention(bert_output_left, bert_output_right)
 
-        # SC
-        source_credibility = self.sacilstm(bert_output_right.unsqueeze(1), bert_output_comment, ping)[:, -1, :]     # torch.Size([batch_size, hidden_size])
-        source_credibility = self.credibility_layer(source_credibility)                                             # torch.Size([batch_size, 64])
+        o_q = self.bilstm_qa(torch.cat([bert_output_left, n_aq], dim=-1))[:, -1, :]          # torch.Size([batch_size, hidden_size])
+        o_a = self.bilstm_qa(torch.cat([bert_output_right, n_qa], dim=-1))[:, -1, :]         # torch.Size([batch_size, hidden_size])
 
-        usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
-        outputs = self.usefulness_layer(usefulness)[:, 1].unsqueeze(1)                                              # torch.Size([batch_size, 1])
+        s_qa = self.mlp_qa_layer(torch.cat([o_q, o_a], dim=-1))                              # torch.Size([batch_size, hidden_size])
+
+        # Review-Answer (RA) Coherence Modeling
+        m_a = self.bilstm_ra(bert_output_left)[:, -1, :]                                            # torch.Size([batch_size, hidden_size])
+        o_r = []
+        for j in range(len(comment)):
+            o_r.append(self.bilstm_ra(bert_output_comment[j])[:, -1, :])                            # torch.Size([max_sequence_length, hidden_size])
+        o_r = torch.stack(o_r, dim=0)                                                               # torch.Size([batch_size, max_sequence_length, hidden_size])
+
+        v_r = self.q_2_r_attention(o_q, bert_output_comment)                                        # torch.Size([batch_size, max_sequence_length, hidden_size])
+
+        m_r = torch.add(v_r, o_r)                                                                   # torch.Size([batch_size, max_sequence_length, hidden_size])
+
+        s_ra = self.mlp_ra_layer(
+            torch.cat([m_r, m_a.unsqueeze(1).repeat(1, m_r.size(1), 1)], dim=-1))            # torch.Size([batch_size, max_sequence_length, hidden_size])
+
+        outputs = self.mlp_p_layer(
+            torch.cat([s_qa, torch.sum(s_ra, dim=1)], dim=-1)
+        )[:, 1].unsqueeze(1)
 
         return outputs
+
+    @staticmethod
+    def dual_attention(x, y):
+        """
+
+        :param x: [B, N, D]
+        :param y: [B, M, D]
+        :return: y-enhanced x representation, x-enhanced y representation
+        """
+        attention_scores = torch.matmul(x, y.transpose(-1, -2))                     # [B, N, M]
+
+        x_attention_probs = nn.Softmax(dim=-1)(attention_scores)
+        x_context_layer = torch.matmul(x_attention_probs, y)                        # [B, N, D]
+
+        y_attention_probs = nn.Softmax(dim=-1)(attention_scores.transpose(-1, -2))  # [B, M, N]
+        y_context_layer = torch.matmul(y_attention_probs, x)                        # [B, M, D]
+
+        return x_context_layer, y_context_layer
+
+    @staticmethod
+    def q_2_r_attention(x, y):
+        """
+
+        :param x: [B, D]
+        :param y: [B, N, S, D]
+        :return: question-attended review representation
+        """
+        attention_scores = torch.sum(x.unsqueeze(1).unsqueeze(1) * y, dim=-1)     # [B, N, S]
+
+        attention_probs = nn.Softmax(dim=-1)(attention_scores)
+        context_layer = torch.sum(attention_probs.unsqueeze(-1) * y, dim=2)       # [B, N, D]
+
+        return context_layer
 
 
 def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, step):
@@ -316,8 +355,8 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Our Model without RST Pre-training')
-    parser.add_argument('--task_name', nargs='?', default='OM_wo_RST',
+    parser = argparse.ArgumentParser(description='RAHP Model')
+    parser.add_argument('--task_name', nargs='?', default='RAHP',
                         help='Task name')
 
     parser.add_argument('--batch_size', type=int, default=4,
@@ -330,7 +369,7 @@ def parse_args():
                         help='Data directory')
     parser.add_argument('--data_name', nargs='?', default='meta.stackoverflow.com',
                         help='Data name')
-    parser.add_argument('--device', nargs='?', default='cuda:1',
+    parser.add_argument('--device', nargs='?', default='cuda:0',
                         help='Device')
     parser.add_argument('--dropout_prob', type=float, default=0.1,
                         help='Dropout probability')
@@ -338,9 +377,9 @@ def parse_args():
                         help='Number of epochs')
     parser.add_argument('--finetuned_model_path', nargs='?', default='./FinetunedModel/Our_model-20241004_191930/best_model.pth',
                         help='Finetuned model path')
-    parser.add_argument('--fold', type=int, default=5,
+    parser.add_argument('--fold', type=int, default=1,
                         help='Fold')
-    parser.add_argument('--freeze', type=bool, default=False,
+    parser.add_argument('--freeze', type=bool, default=True,
                         help='Freeze')
     parser.add_argument('--hidden_size', type=int, default=108,
                         help='Hidden size')
@@ -356,7 +395,7 @@ def parse_args():
                         help='Learning rate')
     parser.add_argument('--max_length', type=int, default=256,
                         help='Max length')
-    parser.add_argument('--max_seq_length', type=int, default=32,
+    parser.add_argument('--max_seq_length', type=int, default=5,
                         help='Max sequence length')
     parser.add_argument('--normalize', type=bool, default=True,
                         help='Normalize')
@@ -461,7 +500,7 @@ def main():
 
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
 
-    model = OurModel(
+    model = RAHPModel(
         freeze=args.freeze,
         pretrained_model_name_or_path=args.pretrained_model_path,
         device=device,
