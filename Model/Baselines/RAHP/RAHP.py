@@ -84,7 +84,7 @@ class RAHPModel(nn.Module):
 
         self.mlp_ra_layer = nn.Linear(hidden_size * 2, hidden_size)
 
-        self.mlp_p_layer = nn.Linear(hidden_size * 2, num_labels)
+        self.mlp_p_layer = nn.Linear(hidden_size * 6, num_labels)
 
     def forward(self, inputs: dict):
         text_left = torch.stack([x.to(self.device) for x in inputs['text_left']], dim=0)            # torch.Size([batch_size, max_length])
@@ -122,7 +122,7 @@ class RAHPModel(nn.Module):
             torch.cat([m_r, m_a.unsqueeze(1).repeat(1, m_r.size(1), 1)], dim=-1))            # torch.Size([batch_size, max_sequence_length, hidden_size])
 
         outputs = self.mlp_p_layer(
-            torch.cat([s_qa, torch.sum(s_ra, dim=1)], dim=-1)
+            torch.cat([s_qa, s_ra.view(s_ra.size(0), -1)], dim=-1)
         )[:, 1].unsqueeze(1)
 
         return outputs
@@ -397,6 +397,8 @@ def parse_args():
                         help='Max length')
     parser.add_argument('--max_seq_length', type=int, default=5,
                         help='Max sequence length')
+    parser.add_argument('--min_seq_length', type=int, default=5,
+                        help='Min sequence length')
     parser.add_argument('--normalize', type=bool, default=True,
                         help='Normalize')
     parser.add_argument('--num_attention_heads', type=int, default=12,
@@ -447,6 +449,7 @@ def main():
             max_seq_length=args.max_seq_length,
             mode='accept',
             fold=args.fold,
+            min_seq_length=args.min_seq_length,
         ).get_train_examples(args.data_dir)
         train_dataset = OurDataset(
             argument_quality=argument_quality,
@@ -480,6 +483,7 @@ def main():
         max_seq_length=args.max_seq_length,
         mode='accept',
         fold=args.fold,
+        min_seq_length=args.min_seq_length,
     ).get_test_examples(args.data_dir)
 
     test_dataset = OurDataset(
