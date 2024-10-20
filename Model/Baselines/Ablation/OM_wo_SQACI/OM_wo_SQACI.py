@@ -308,8 +308,8 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Our Model without SACI')
-    parser.add_argument('--task_name', nargs='?', default='OM_wo_SACI',
+    parser = argparse.ArgumentParser(description='Our Model without SQACI')
+    parser.add_argument('--task_name', nargs='?', default='OM_wo_SQACI',
                         help='Task name')
 
     parser.add_argument('--batch_size', type=int, default=4,
