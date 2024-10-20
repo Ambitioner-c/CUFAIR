@@ -50,6 +50,7 @@ class OurModel(nn.Module):
             num_layers: int = 1,
             num_attention_heads: int = 12,
             num_labels: int = 2,
+            ci_mode: str = 'all',
     ):
         super(OurModel, self).__init__()
         self.device = device
@@ -74,6 +75,7 @@ class OurModel(nn.Module):
             num_layers=num_layers,
             output_size=hidden_size,
             num_attention_heads=num_attention_heads,
+            ci_mode=ci_mode,
         )
 
         self.credibility_layer = nn.Linear(hidden_size, 64)
@@ -311,14 +313,16 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Our Model without Sustained Attention')
-    parser.add_argument('--task_name', nargs='?', default='OM_wo_SA',
+    parser = argparse.ArgumentParser(description='Our Model without Sustained Question and Answer')
+    parser.add_argument('--task_name', nargs='?', default='OM_wo_SQA',
                         help='Task name')
 
     parser.add_argument('--batch_size', type=int, default=4,
                         help='Batch size')
     parser.add_argument('--bert_hidden_size', type=int, default=768,
                         help='Bert hidden size')
+    parser.add_argument('--ci_mode', nargs='?', default='all',
+                        help='CI Mode')
     parser.add_argument('--data_dir', nargs='?', default='/home/cuifulai/Projects/CQA/Data/StackExchange',
                         help='Data directory')
     parser.add_argument('--data_name', nargs='?', default='meta.stackoverflow.com',
@@ -461,6 +465,7 @@ def main():
         dropout_prob=args.dropout_prob,
         num_layers=args.num_layers,
         num_attention_heads=args.num_attention_heads,
+        ci_mode=args.ci_mode,
     ).to(device)
 
     timestamp = None
