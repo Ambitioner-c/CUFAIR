@@ -317,7 +317,7 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Our Model without Sustained Question')
-    parser.add_argument('--task_name', nargs='?', default='OM_wo_SuQ',
+    parser.add_argument('--task_name', nargs='?', default='OM_wo_SQ',
                         help='Task name')
 
     parser.add_argument('--batch_size', type=int, default=4,
