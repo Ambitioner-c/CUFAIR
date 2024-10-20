@@ -20,7 +20,7 @@ from Losses.RankHingeLoss import RankHingeLoss
 from Model.DataLoader.DataLoader import DataLoader
 from Model.DataLoader.DataProcessor import OurProcessor
 from Model.DataLoader.Dataset import OurDataset
-from Model.LSTM.SALSTM import SALSTMModel
+from Model.LSTM.SQALSTM import SQALSTMModel
 from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 
 from warnings import simplefilter
@@ -49,6 +49,7 @@ class OurModel(nn.Module):
             dropout_prob: float = 0.1,
             num_layers: int = 1,
             num_labels: int = 2,
+            is_peephole: bool = False,
     ):
         super(OurModel, self).__init__()
         self.device = device
@@ -67,12 +68,14 @@ class OurModel(nn.Module):
 
         self.relevancy_layer = nn.Linear(hidden_size * 2, 20)
 
-        self.attention_lstm = SALSTMModel(
-            attention_size=hidden_size,
+        self.attention_lstm = SQALSTMModel(
+            question_size=hidden_size,
+            answer_size=hidden_size,
             input_size=hidden_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
             output_size=hidden_size,
+            is_peephole=is_peephole,
         )
 
         self.credibility_layer = nn.Linear(hidden_size, 64)
@@ -106,7 +109,7 @@ class OurModel(nn.Module):
         argument_quality = torch.cat([relevancy, feature], dim=-1)                           # torch.Size([batch_size, 64])
 
         # SC
-        source_credibility = self.attention_lstm(bert_output_right.unsqueeze(1), bert_output_comment)[:, -1, :]     # torch.Size([batch_size, hidden_size])
+        source_credibility = self.attention_lstm(bert_output_left.unsqueeze(1), bert_output_right.unsqueeze(1), bert_output_comment)[:, -1, :]     # torch.Size([batch_size, hidden_size])
         source_credibility = self.credibility_layer(source_credibility)                                             # torch.Size([batch_size, 64])
 
         usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
@@ -337,6 +340,8 @@ def parse_args():
                         help='Hidden size')
     parser.add_argument('--is_from_finetuned', type=bool, default=False,
                         help='Is from finetuned')
+    parser.add_argument('--is_peephole', type=bool, default=False,
+                        help='Is peephole')
     parser.add_argument('--is_train', type=bool, default=True,
                         help='Is train')
     parser.add_argument('--limit', nargs='?', default=[0, 0, 0],
@@ -458,6 +463,7 @@ def main():
         bert_hidden_size=args.bert_hidden_size,
         dropout_prob=args.dropout_prob,
         num_layers=args.num_layers,
+        is_peephole=args.is_peephole,
     ).to(device)
 
     timestamp = None
