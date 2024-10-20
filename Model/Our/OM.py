@@ -20,7 +20,7 @@ from Model.Losses.RankHingeLoss import RankHingeLoss
 from Model.DataLoader.DataLoader import DataLoader
 from Model.DataLoader.DataProcessor import OurProcessor
 from Model.DataLoader.Dataset import OurDataset
-from Model.LSTM.SACILSTM import SACILSTMModel
+from Model.LSTM.SQACILSTM import SQACILSTMModel
 from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 
 from warnings import simplefilter
@@ -50,6 +50,8 @@ class OurModel(nn.Module):
             num_layers: int = 1,
             num_attention_heads: int = 12,
             num_labels: int = 2,
+            is_peephole: bool = False,
+            ci_mode: str = 'all',
     ):
         super(OurModel, self).__init__()
         self.device = device
@@ -68,13 +70,16 @@ class OurModel(nn.Module):
 
         self.relevancy_layer = nn.Linear(hidden_size * 2, 20)
 
-        self.sacilstm = SACILSTMModel(
-            attention_size=hidden_size,
+        self.sqacilstm = SQACILSTMModel(
+            question_size=hidden_size,
+            answer_size=hidden_size,
             input_size=hidden_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
             output_size=hidden_size,
             num_attention_heads=num_attention_heads,
+            is_peephole=is_peephole,
+            ci_mode=ci_mode,
         )
 
         self.credibility_layer = nn.Linear(hidden_size, 64)
@@ -109,7 +114,7 @@ class OurModel(nn.Module):
         argument_quality = torch.cat([relevancy, feature], dim=-1)                           # torch.Size([batch_size, 64])
 
         # SC
-        source_credibility = self.sacilstm(bert_output_right.unsqueeze(1), bert_output_comment, ping)[:, -1, :]     # torch.Size([batch_size, hidden_size])
+        source_credibility = self.sacilstm(bert_output_left.unsqueeze(1), bert_output_right.unsqueeze(1), bert_output_comment, ping)[:, -1, :]     # torch.Size([batch_size, hidden_size])
         source_credibility = self.credibility_layer(source_credibility)                                             # torch.Size([batch_size, 64])
 
         usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
@@ -320,6 +325,8 @@ def parse_args():
                         help='Batch size')
     parser.add_argument('--bert_hidden_size', type=int, default=768,
                         help='Bert hidden size')
+    parser.add_argument('--ci_mode', nargs='?', default='all',
+                        help='CI Mode')
     parser.add_argument('--data_dir', nargs='?', default='/home/cuifulai/Projects/CQA/Data/StackExchange',
                         help='Data directory')
     parser.add_argument('--data_name', nargs='?', default='meta.stackoverflow.com',
@@ -328,12 +335,10 @@ def parse_args():
                         help='Device')
     parser.add_argument('--dropout_prob', type=float, default=0.1,
                         help='Dropout probability')
-    parser.add_argument('--epochs', type=int, default=5,
+    parser.add_argument('--epochs', type=int, default=10,
                         help='Number of epochs')
     parser.add_argument('--finetuned_model_path', nargs='?', default='./FinetunedModel/Our_model-20241004_191930/best_model.pth',
                         help='Finetuned model path')
-    parser.add_argument('--finetuned_self_attention_model_path', nargs='?', default='../Baselines/Ablation/RST/FinetunedModel/RST_based_classifier-20241015_212539/self_attention.pth',
-                        help='Finetuned self attention model path')
     parser.add_argument('--fold', type=int, default=1,
                         help='Fold')
     parser.add_argument('--freeze', type=bool, default=False,
@@ -342,6 +347,8 @@ def parse_args():
                         help='Hidden size')
     parser.add_argument('--is_from_finetuned', type=bool, default=False,
                         help='Is from finetuned')
+    parser.add_argument('--is_peephole', type=bool, default=False,
+                        help='Is peephole')
     parser.add_argument('--is_train', type=bool, default=True,
                         help='Is train')
     parser.add_argument('--limit', nargs='?', default=[0, 0, 0],
@@ -464,9 +471,9 @@ def main():
         dropout_prob=args.dropout_prob,
         num_layers=args.num_layers,
         num_attention_heads=args.num_attention_heads,
+        is_peephole=args.is_peephole,
+        ci_mode=args.ci_mode,
     ).to(device)
-    model.sacilstm.sacilstm.self_attention.load_state_dict(torch.load(args.finetuned_self_attention_model_path))
-    model.sacilstm.sacilstm.self_attention.to(device)
 
     timestamp = None
     if args.is_from_finetuned:
