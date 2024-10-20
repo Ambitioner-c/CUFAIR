@@ -73,10 +73,8 @@ class SQALSTM(nn.Module):
             input_size: int,
             hidden_size: int,
             num_layers: int = 1,
-            num_attention_heads = 12,
             batch_first: bool = False,
             is_peephole: bool = False,
-            ci_mode: str = 'all',
     ):
         super(SQALSTM, self).__init__()
         self.hidden_size = hidden_size
@@ -89,12 +87,6 @@ class SQALSTM(nn.Module):
 
         self.h = None
         self.c = None
-
-        self.self_attention = BertSelfAttention(hidden_size, num_attention_heads)
-        if ci_mode == 'all':
-            self.self_attention_layer = nn.Linear(hidden_size * 2, hidden_size)
-
-        self.ci_mode = ci_mode
 
     def forward(
             self,
@@ -138,14 +130,12 @@ class SQALSTMModel(nn.Module):
             hidden_size: int,
             num_layers: int,
             output_size: int,
-            num_attention_heads: int,
             is_peephole: bool,
-            ci_mode: str,
     ):
         super(SQALSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.sqalstm = SQALSTM(question_size, answer_size, input_size, hidden_size, num_layers, num_attention_heads, batch_first=True, is_peephole=is_peephole, ci_mode=ci_mode)
+        self.sqalstm = SQALSTM(question_size, answer_size, input_size, hidden_size, num_layers, batch_first=True, is_peephole=is_peephole)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, question: Tensor, answer: Tensor, x: Tensor) -> Tensor:
@@ -168,10 +158,8 @@ def main():
     hidden_size = 12
     num_layers = 2
     output_size = 5
-    num_attention_heads = 12
     is_peephole = False
-    ci_mode = 'all'
-    model = SQALSTMModel(input_size, input_size, input_size, hidden_size, num_layers, output_size, num_attention_heads, is_peephole, ci_mode)
+    model = SQALSTMModel(input_size, input_size, input_size, hidden_size, num_layers, output_size, is_peephole)
     outputs = model(questions, answers, inputs)
     print(outputs.size())
 
