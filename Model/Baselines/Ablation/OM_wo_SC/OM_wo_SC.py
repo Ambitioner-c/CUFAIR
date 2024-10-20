@@ -20,7 +20,6 @@ from Losses.RankHingeLoss import RankHingeLoss
 from Model.DataLoader.DataLoader import DataLoader
 from Model.DataLoader.DataProcessor import OurProcessor
 from Model.DataLoader.Dataset import OurDataset
-from Model.LSTM.SALSTM import SALSTMModel
 from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 
 from warnings import simplefilter
@@ -47,7 +46,6 @@ class OurModel(nn.Module):
             hidden_size: int = 108,
             bert_hidden_size: int = 768,
             dropout_prob: float = 0.1,
-            num_layers: int = 1,
             num_labels: int = 2,
     ):
         super(OurModel, self).__init__()
@@ -66,14 +64,6 @@ class OurModel(nn.Module):
         self.feature_norm = nn.BatchNorm1d(44)
 
         self.relevancy_layer = nn.Linear(hidden_size * 2, 20)
-
-        self.attention_lstm = SALSTMModel(
-            attention_size=hidden_size,
-            input_size=hidden_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            output_size=hidden_size,
-        )
 
         self.credibility_layer = nn.Linear(hidden_size, 64)
 
@@ -446,7 +436,6 @@ def main():
         hidden_size=args.hidden_size,
         bert_hidden_size=args.bert_hidden_size,
         dropout_prob=args.dropout_prob,
-        num_layers=args.num_layers,
     ).to(device)
 
     timestamp = None
