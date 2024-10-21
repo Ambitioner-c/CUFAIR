@@ -91,30 +91,30 @@ class RAHPModel(nn.Module):
         text_right = torch.stack([x.to(self.device) for x in inputs['text_right']], dim=0)          # torch.Size([batch_size, max_length])
         comment = torch.stack([x.to(self.device) for x in inputs['comment']], dim=0)                # torch.Size([batch_size, max_sequence_length, max_length])
 
-        bert_output_left = self.reduction_layer(self.bert(text_left)['last_hidden_state'])          # torch.Size([batch_size, max_length, hidden_size])
-        bert_output_right = self.reduction_layer(self.bert(text_right)['last_hidden_state'])        # torch.Size([batch_size, max_length, hidden_size])
+        bert_state_left = self.reduction_layer(self.bert(text_left)['last_hidden_state'])          # torch.Size([batch_size, max_length, hidden_size])
+        bert_state_right = self.reduction_layer(self.bert(text_right)['last_hidden_state'])        # torch.Size([batch_size, max_length, hidden_size])
 
-        bert_output_comment = []
+        bert_state_comment = []
         for j in range(len(comment)):
-            bert_output_comment.append(self.reduction_layer(self.bert(comment[j])['last_hidden_state']))
-        bert_output_comment = torch.stack(bert_output_comment, dim=0)                               # torch.Size([batch_size, max_sequence_length, max_length, hidden_size])
+            bert_state_comment.append(self.reduction_layer(self.bert(comment[j])['last_hidden_state']))
+        bert_state_comment = torch.stack(bert_state_comment, dim=0)                               # torch.Size([batch_size, max_sequence_length, max_length, hidden_size])
 
         # QA Interaction Modeling
-        n_aq, n_qa = self.dual_attention(bert_output_left, bert_output_right)
+        n_aq, n_qa = self.dual_attention(bert_state_left, bert_state_right)
 
-        o_q = self.bilstm_qa(torch.cat([bert_output_left, n_aq], dim=-1))[:, -1, :]          # torch.Size([batch_size, hidden_size])
-        o_a = self.bilstm_qa(torch.cat([bert_output_right, n_qa], dim=-1))[:, -1, :]         # torch.Size([batch_size, hidden_size])
+        o_q = self.bilstm_qa(torch.cat([bert_state_left, n_aq], dim=-1))[:, -1, :]          # torch.Size([batch_size, hidden_size])
+        o_a = self.bilstm_qa(torch.cat([bert_state_right, n_qa], dim=-1))[:, -1, :]         # torch.Size([batch_size, hidden_size])
 
         s_qa = self.mlp_qa_layer(torch.cat([o_q, o_a], dim=-1))                              # torch.Size([batch_size, hidden_size])
 
         # Review-Answer (RA) Coherence Modeling
-        m_a = self.bilstm_ra(bert_output_left)[:, -1, :]                                            # torch.Size([batch_size, hidden_size])
+        m_a = self.bilstm_ra(bert_state_right)[:, -1, :]                                            # torch.Size([batch_size, hidden_size])
         o_r = []
         for j in range(len(comment)):
-            o_r.append(self.bilstm_ra(bert_output_comment[j])[:, -1, :])                            # torch.Size([max_sequence_length, hidden_size])
+            o_r.append(self.bilstm_ra(bert_state_comment[j])[:, -1, :])                            # torch.Size([max_sequence_length, hidden_size])
         o_r = torch.stack(o_r, dim=0)                                                               # torch.Size([batch_size, max_sequence_length, hidden_size])
 
-        v_r = self.q_2_r_attention(o_q, bert_output_comment)                                        # torch.Size([batch_size, max_sequence_length, hidden_size])
+        v_r = self.q_2_r_attention(o_q, bert_state_comment)                                        # torch.Size([batch_size, max_sequence_length, hidden_size])
 
         m_r = torch.add(v_r, o_r)                                                                   # torch.Size([batch_size, max_sequence_length, hidden_size])
 
@@ -369,15 +369,15 @@ def parse_args():
                         help='Data directory')
     parser.add_argument('--data_name', nargs='?', default='meta.stackoverflow.com',
                         help='Data name')
-    parser.add_argument('--device', nargs='?', default='cuda:0',
+    parser.add_argument('--device', nargs='?', default='cuda:1',
                         help='Device')
     parser.add_argument('--dropout_prob', type=float, default=0.1,
                         help='Dropout probability')
-    parser.add_argument('--epochs', type=int, default=5,
+    parser.add_argument('--epochs', type=int, default=3,
                         help='Number of epochs')
     parser.add_argument('--finetuned_model_path', nargs='?', default='./FinetunedModel/Our_model-20241004_191930/best_model.pth',
                         help='Finetuned model path')
-    parser.add_argument('--fold', type=int, default=1,
+    parser.add_argument('--fold', type=int, default=10,
                         help='Fold')
     parser.add_argument('--freeze', type=bool, default=True,
                         help='Freeze')
