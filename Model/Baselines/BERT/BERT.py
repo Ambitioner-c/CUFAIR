@@ -63,9 +63,7 @@ class OurModel(nn.Module):
             for p in self.bert.parameters():
                 p.requires_grad = False
 
-        self.reduction_layer = nn.Linear(bert_hidden_size, hidden_size)
-
-        self.relevancy_layer = nn.Linear(hidden_size * 2, num_labels)
+        self.relevancy_layer = nn.Linear(bert_hidden_size * 2, num_labels)
 
         self.dropout = nn.Dropout(dropout_prob)
 
@@ -73,8 +71,8 @@ class OurModel(nn.Module):
         text_left = torch.stack([x.to(self.device) for x in inputs['text_left']], dim=0)            # torch.Size([batch_size, max_length])
         text_right = torch.stack([x.to(self.device) for x in inputs['text_right']], dim=0)          # torch.Size([batch_size, max_length])
 
-        bert_output_left = self.reduction_layer(self.bert(text_left)['pooler_output'])              # torch.Size([batch_size, hidden_size])
-        bert_output_right = self.reduction_layer(self.bert(text_right)['pooler_output'])            # torch.Size([batch_size, hidden_size])
+        bert_output_left = self.bert(text_left)['pooler_output']              # torch.Size([batch_size, hidden_size])
+        bert_output_right = self.bert(text_right)['pooler_output']            # torch.Size([batch_size, hidden_size])
 
         # AQ
         # Relevancy
