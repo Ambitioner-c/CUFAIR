@@ -20,7 +20,6 @@ from Model.Losses.RankHingeLoss import RankHingeLoss
 from Model.DataLoader.DataLoader import DataLoader
 from Model.DataLoader.DataProcessor import OurProcessor
 from Model.DataLoader.Dataset import OurDataset
-from Model.LSTM.SQACILSTM import SQACILSTMModel
 from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 
 from warnings import simplefilter
