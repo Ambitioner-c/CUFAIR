@@ -20,7 +20,6 @@ from Model.Losses.RankHingeLoss import RankHingeLoss
 from Model.DataLoader.DataLoader import DataLoader
 from Model.DataLoader.DataProcessor import OurProcessor
 from Model.DataLoader.Dataset import OurDataset
-from Model.LSTM.SQACILSTM import SQACILSTMModel
 from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 
 from warnings import simplefilter
@@ -75,22 +74,6 @@ class MVModel(nn.Module):
         self.verification_score_layer = nn.Linear(hidden_size * 2, num_labels)
 
         self.confidence_score_layer = nn.Linear(5 * 5 * 256 * 256, num_labels)
-
-        self.sqacilstm = SQACILSTMModel(
-            question_size=hidden_size,
-            answer_size=hidden_size,
-            input_size=hidden_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            output_size=hidden_size,
-            num_attention_heads=num_attention_heads,
-            is_peephole=is_peephole,
-            ci_mode=ci_mode,
-        )
-
-        self.credibility_layer = nn.Linear(hidden_size, 64)
-
-        self.usefulness_layer = nn.Linear(128, num_labels)
 
         self.dropout = nn.Dropout(dropout_prob)
 
