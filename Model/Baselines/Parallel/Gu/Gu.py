@@ -326,7 +326,7 @@ def parse_args():
                         help='Data directory')
     parser.add_argument('--data_name', nargs='?', default='meta.stackoverflow.com',
                         help='Data name')
-    parser.add_argument('--device', nargs='?', default='cuda:1',
+    parser.add_argument('--device', nargs='?', default='cuda:0',
                         help='Device')
     parser.add_argument('--dropout_prob', type=float, default=0.1,
                         help='Dropout probability')
@@ -352,7 +352,7 @@ def parse_args():
                         help='Learning rate')
     parser.add_argument('--max_length', type=int, default=256,
                         help='Max length')
-    parser.add_argument('--max_seq_length', type=int, default=32,
+    parser.add_argument('--max_seq_length', type=int, default=5,
                         help='Max sequence length')
     parser.add_argument('--min_seq_length', type=int, default=5,
                         help='Min sequence length')
