@@ -20,7 +20,6 @@ from Model.Losses.RankHingeLoss import RankHingeLoss
 from Model.DataLoader.DataLoader import DataLoader
 from Model.DataLoader.DataProcessor import OurProcessor
 from Model.DataLoader.Dataset import OurDataset
-from Model.LSTM.SQACILSTM import SQACILSTMModel
 from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 
 from warnings import simplefilter
@@ -101,14 +100,10 @@ class GuModel(nn.Module):
             torch.cat([bert_output_left, bert_output_right], dim=-1))                        # torch.Size([batch_size, 64])
 
         # SC
-        ad_hoc = []
-        for j in range(len(comment)):
-            ad_hoc.append(
-                self.snippet_layer(
-                    torch.cat([bert_output_left, bert_output_comment[j]], dim=-1)))
-        ad_hoc = torch.stack(ad_hoc, dim=0)                                                         # torch.Size([batch_size, max_sequence_length, hidden_size])
-
-        ad_hoc = self.self_attention(ad_hoc)
+        ad_hoc = self.snippet_layer(
+            torch.cat(
+                (bert_output_left.unsqueeze(1).expand(-1, 5, -1), bert_output_comment), dim=-1))
+        ad_hoc = self.self_attention(ad_hoc)[0]
 
         source_credibility = self.credibility_layer(ad_hoc.view(ad_hoc.size(0), -1))                # torch.Size([batch_size, 64])
 
@@ -326,7 +321,7 @@ def parse_args():
                         help='Data directory')
     parser.add_argument('--data_name', nargs='?', default='meta.stackoverflow.com',
                         help='Data name')
-    parser.add_argument('--device', nargs='?', default='cuda:0',
+    parser.add_argument('--device', nargs='?', default='cuda:1',
                         help='Device')
     parser.add_argument('--dropout_prob', type=float, default=0.1,
                         help='Dropout probability')
