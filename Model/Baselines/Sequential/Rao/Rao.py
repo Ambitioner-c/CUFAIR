@@ -106,7 +106,7 @@ class RaoModel(nn.Module):
 
         # SC
         o_r = []
-        for j in range(len(comment)):
+        for j in range(bert_state_comment.size(1)):
             o_r.append(self.lstm_word(bert_state_comment[:, j, :, :])[:, -1, :])                    # torch.Size([batch_size, hidden_size])
         o_r = torch.stack(o_r, dim=1)                                                               # torch.Size([batch_size, max_sequence_length, hidden_size])
 
