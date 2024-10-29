@@ -44,17 +44,22 @@ class DataLoader:
 
     @property
     def id_left(self) -> torch.Tensor:
-        x, _ = self._dataset[:]
+        x, _, _ = self._dataset[:]
         return x['id_left']
 
     @property
     def label(self) -> np.ndarray:
-        _, y = self._dataset[:]
+        _, y, _ = self._dataset[:]
         return y.squeeze() if y is not None else None
+
+    @property
+    def support(self) -> np.ndarray:
+        _, _, support = self._dataset[:]
+        return support.squeeze() if support is not None else None
 
     def __iter__(self) -> typing.Tuple[dict, torch.tensor]:
         for batch_data in self._dataloader:
-            x, y = batch_data
+            x, y, support = batch_data
 
             batch_x = {}
             for key, value in x.items():
@@ -68,7 +73,10 @@ class DataLoader:
             else:  # task='ranking'
                 batch_y = torch.tensor(
                     y, dtype=torch.float)
-            yield batch_x, batch_y
+
+            batch_support = torch.tensor(support, dtype=torch.float)
+
+            yield batch_x, batch_y, batch_support
 
 
 def main():

@@ -125,6 +125,7 @@ class OurProcessor(DataProcessor, ABC):
         text_right_ids: list = []
         text_rights: list = []
         labels: list = []
+        supports: list = []
         text_others: [list] = []
         ping_others: [list] = []
         extends: list[dict] = []
@@ -136,6 +137,7 @@ class OurProcessor(DataProcessor, ABC):
             temp_text_right_ids = []
             temp_text_rights = []
             temp_labels = []
+            temp_supports = []
             temp_comments = []
             temp_pings = []
 
@@ -151,6 +153,7 @@ class OurProcessor(DataProcessor, ABC):
             a_dates: list = []
             a_accepteds: list = []
             a_scores: list = []
+            a_supports: list = []
             a_bodys: list = []
             a_participants: [list] = []
             a_pings: [list] = []
@@ -165,11 +168,17 @@ class OurProcessor(DataProcessor, ABC):
                 a_date = answer.attrib['CREATION_DATE']
                 a_accepted = answer.attrib['ACCEPTED_ANSWER']
                 a_score = answer.attrib['SCORE']
+                try:
+                    a_support = answer.attrib['COMMUNITY_SUPPORT']
+                except KeyError:
+                    a_support = '-1'
+                a_support = float(a_support)
                 a_body = answer.find('ABody').text
                 a_ids.append(a_id)
                 a_dates.append(a_date)
                 a_accepteds.append(a_accepted)
                 a_scores.append(a_score)
+                a_supports.append(a_support)
                 a_bodys.append(a_body)
 
                 # Comments
@@ -202,10 +211,11 @@ class OurProcessor(DataProcessor, ABC):
                     temp_labels.append(a_scores[__])
                 elif self.mode == 'accept':
                     temp_labels.append(1 if a_accepteds[__] == 'Yes' else 0)
+                temp_supports.append(a_supports[__])
                 temp_comments.append(c_bodys[__])
                 temp_pings.append(a_pings[__])
 
-            assert len(temp_text_left_ids) == len(temp_text_lefts) == len(temp_text_right_ids) == len(temp_text_rights) == len(temp_labels) == len(temp_comments) == len(temp_pings)
+            assert len(temp_text_left_ids) == len(temp_text_lefts) == len(temp_text_right_ids) == len(temp_text_rights) == len(temp_labels) == len(temp_supports) == len(temp_comments) == len(temp_pings)
             if len(temp_labels) < self.threshold:
                 continue
 
@@ -246,6 +256,7 @@ class OurProcessor(DataProcessor, ABC):
             text_right_ids.extend(temp_text_right_ids)
             text_rights.extend(temp_text_rights)
             labels.extend(temp_labels)
+            supports.extend(temp_supports)
             text_others.extend(temp_comments)
             ping_others.extend(temp_pings)
             extends.extend(temp_extends)
@@ -257,6 +268,7 @@ class OurProcessor(DataProcessor, ABC):
             'right_id': text_right_ids,
             'text_right': text_rights,
             'label': labels,
+            'support': supports,
             'comment': text_others,
             'ping': ping_others,
             'extend': extends,
@@ -277,6 +289,7 @@ class OurProcessor(DataProcessor, ABC):
         # Build Relation
         relation = pd.DataFrame(data={'id_left': id_left, 'id_right': id_right})
         relation['label'] = df['label']
+        relation['support'] = df['support']
         if self.task == 'classification':
             relation['label'] = relation['label'].astype(int)
         elif self.task == 'ranking':
@@ -340,7 +353,7 @@ def main():
     data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
     data_name = 'meta.stackoverflow.com'
 
-    fold = 10
+    fold = 1
 
     train_dp = OurProcessor(
         data_name=data_name,

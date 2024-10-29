@@ -118,7 +118,7 @@ class OurDataset(Dataset):
 
         return data_pack
 
-    def __getitem__(self, item) -> typing.Tuple[dict, np.ndarray]:
+    def __getitem__(self, item) -> typing.Tuple[dict, np.ndarray, np.ndarray]:
         if isinstance(item, slice):
             indices = sum(self._batch_indices[item], [])
         elif isinstance(item, typing.Iterable):
@@ -126,8 +126,8 @@ class OurDataset(Dataset):
         else:
             indices = self._batch_indices[item]
         batch_data_pack = self._data_pack[indices]
-        x, y = batch_data_pack.unpack()
-        return x, y
+        x, y, support = batch_data_pack.unpack()
+        return x, y, support
 
     def __len__(self) -> int:
         return len(self._batch_indices)

@@ -60,15 +60,18 @@ class DataPack:
     def frame(self) -> 'DataPack.FrameView':
         return DataPack.FrameView(self)
 
-    def unpack(self) -> typing.Tuple[typing.Dict[str, np.array], typing.Optional[np.array]]:
+    def unpack(self) -> typing.Tuple[typing.Dict[str, np.array], typing.Optional[np.array], typing.Optional[np.array]]:
         frame = self.frame()
 
         columns = list(frame.columns)
         if self.has_label:
             columns.remove('label')
+            columns.remove('support')
             y = np.vstack(np.asarray(frame['label']))
+            support = np.vstack(np.asarray(frame['support']))
         else:
             y = None
+            support = None
 
         x = frame[columns].to_dict(orient='list')
 
@@ -100,7 +103,7 @@ class DataPack:
             else:
                 x[key] = val
 
-        return x, y
+        return x, y, support
 
     def __getitem__(self, index: typing.Union[int, slice, np.array]) -> 'DataPack':
         index = _convert_to_list_index(index, len(self))
