@@ -108,6 +108,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
 
     optimizer = Adam(model.parameters(), lr=lr)
     loss_function = RankHingeLoss(
+        margin=args.margin,
         num_neg=args.num_neg,
     )
 
@@ -322,9 +323,11 @@ def parse_args():
                         help='Limit')
     parser.add_argument('--lr', type=float, default=2e-5,
                         help='Learning rate')
+    parser.add_argument('--margin', type=float, default=5,
+                        help='Margin')
     parser.add_argument('--max_length', type=int, default=256,
                         help='Max length')
-    parser.add_argument('--max_seq_length', type=int, default=32,
+    parser.add_argument('--max_seq_length', type=int, default=5,
                         help='Max sequence length')
     parser.add_argument('--normalize', type=bool, default=True,
                         help='Normalize')
