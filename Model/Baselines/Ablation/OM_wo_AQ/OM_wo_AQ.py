@@ -66,10 +66,6 @@ class OurModel(nn.Module):
 
         self.reduction_layer = nn.Linear(bert_hidden_size, hidden_size)
 
-        self.feature_norm = nn.BatchNorm1d(44)
-
-        self.relevancy_layer = nn.Linear(hidden_size * 2, 20)
-
         self.sqacilstm = SQACILSTMModel(
             question_size=hidden_size,
             answer_size=hidden_size,
@@ -86,7 +82,7 @@ class OurModel(nn.Module):
 
         self.community_support_layer = nn.Linear(64, 1)
 
-        self.usefulness_layer = nn.Linear(128, num_labels)
+        self.usefulness_layer = nn.Linear(64, num_labels)
 
         self.dropout = nn.Dropout(dropout_prob)
 
@@ -95,11 +91,6 @@ class OurModel(nn.Module):
         text_right = torch.stack([x.to(self.device) for x in inputs['text_right']], dim=0)          # torch.Size([batch_size, max_length])
         comment = torch.stack([x.to(self.device) for x in inputs['comment']], dim=0)                # torch.Size([batch_size, max_sequence_length, max_length])
         ping = torch.stack([x.to(self.device) for x in inputs['ping']], dim=0)                      # torch.Size([batch_size, max_sequence_length])
-        feature = torch.stack([torch.tensor(x).to(self.device) for x in inputs['feature']], dim=0)  # torch.Size([batch_size, 44])
-        try:
-            feature = self.feature_norm(feature)                                                        # torch.Size([batch_size, 44])
-        except ValueError:
-            feature = feature
 
         bert_output_left = self.reduction_layer(self.bert(text_left)['pooler_output'])              # torch.Size([batch_size, hidden_size])
         bert_output_right = self.reduction_layer(self.bert(text_right)['pooler_output'])            # torch.Size([batch_size, hidden_size])
@@ -109,18 +100,11 @@ class OurModel(nn.Module):
             bert_output_comment.append(self.reduction_layer(self.bert(comment[j])['pooler_output']))
         bert_output_comment = torch.stack(bert_output_comment, dim=0)                               # torch.Size([batch_size, max_sequence_length, hidden_size])
 
-        # AQ
-        # Relevancy
-        relevancy = self.relevancy_layer(
-            torch.cat([bert_output_left, bert_output_right], dim=-1))                        # torch.Size([batch_size, 20])
-        argument_quality = torch.cat([relevancy, feature], dim=-1)                           # torch.Size([batch_size, 64])
-
         # SC
         source_credibility = self.sqacilstm(bert_output_left.unsqueeze(1), bert_output_right.unsqueeze(1), bert_output_comment, ping)[:, -1, :]     # torch.Size([batch_size, hidden_size])
-        source_credibility = self.credibility_layer(source_credibility)                                             # torch.Size([batch_size, 64])
+        source_credibility = self.credibility_layer(source_credibility)                             # torch.Size([batch_size, 64])
 
-        usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
-        outputs = self.usefulness_layer(usefulness)[:, 1].unsqueeze(1)                                              # torch.Size([batch_size, 1])
+        outputs = self.usefulness_layer(source_credibility)[:, 1].unsqueeze(1)                      # torch.Size([batch_size, 1])
 
         return outputs, self.community_support_layer(source_credibility)
 
@@ -328,8 +312,8 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Our Model')
-    parser.add_argument('--task_name', nargs='?', default='OM',
+    parser = argparse.ArgumentParser(description='Our Model without Argument Quality')
+    parser.add_argument('--task_name', nargs='?', default='OM_wo_AQ',
                         help='Task name')
 
     parser.add_argument('--alpha', type=float, default=0.8,
