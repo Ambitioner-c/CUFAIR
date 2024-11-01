@@ -323,7 +323,7 @@ def parse_args():
                         help='Limit')
     parser.add_argument('--lr', type=float, default=2e-5,
                         help='Learning rate')
-    parser.add_argument('--margin', type=float, default=5,
+    parser.add_argument('--margin', type=float, default=1,
                         help='Margin')
     parser.add_argument('--max_length', type=int, default=256,
                         help='Max length')
