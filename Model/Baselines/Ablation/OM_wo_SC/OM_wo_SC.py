@@ -119,7 +119,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
     n = 0
     for epoch in range(epochs):
         for train_sample in tqdm(train_dataloader):
-            train_inputs, _ = train_sample
+            train_inputs, _, _ = train_sample
 
             optimizer.zero_grad()
 
@@ -139,7 +139,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
             if n % step == 0:
                 predictions = []
                 for dev_sample in dev_dataloader:
-                    dev_inputs, _ = dev_sample
+                    dev_inputs, _, _ = dev_sample
                     with torch.no_grad():
                         dev_outputs = model(dev_inputs).detach().cpu()
                         predictions.append(dev_outputs)
@@ -255,7 +255,7 @@ def eval_ranking_metrics_on_data_frame(
 def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
     predictions = []
     for test_sample in test_dataloader:
-        test_inputs, _ = test_sample
+        test_inputs, _, _ = test_sample
         with torch.no_grad():
             test_outputs = model(test_inputs).detach().cpu()
             predictions.append(test_outputs)
