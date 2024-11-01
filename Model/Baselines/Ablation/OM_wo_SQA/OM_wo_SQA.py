@@ -80,6 +80,8 @@ class OurModel(nn.Module):
 
         self.credibility_layer = nn.Linear(hidden_size, 64)
 
+        self.community_support_layer = nn.Linear(64, 1)
+
         self.usefulness_layer = nn.Linear(128, num_labels)
 
         self.dropout = nn.Dropout(dropout_prob)
@@ -116,10 +118,10 @@ class OurModel(nn.Module):
         usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
         outputs = self.usefulness_layer(usefulness)[:, 1].unsqueeze(1)                                              # torch.Size([batch_size, 1])
 
-        return outputs
+        return outputs, self.community_support_layer(source_credibility)
 
 
-def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, step):
+def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, device, step):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     args_path = f'./Result/Temp/{task_name}-{timestamp}/args.json'
@@ -133,8 +135,10 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
 
     optimizer = Adam(model.parameters(), lr=lr)
     loss_function = RankHingeLoss(
+        margin=args.margin,
         num_neg=args.num_neg,
     )
+    support_loss_function = nn.MSELoss()
 
     best_model = None
     (best_p_1, best_p_3, best_p_5, best_ap, best_map), best_mrr, (best_dcg_1, best_dcg_3, best_dcg_5), (best_ndcg_1, best_ndcg_3, best_ndcg_5) = (
@@ -143,29 +147,36 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
     n = 0
     for epoch in range(epochs):
         for train_sample in tqdm(train_dataloader):
-            train_inputs, _ = train_sample
+            train_inputs, _, supports = train_sample
+            mask = supports >= 0
 
             optimizer.zero_grad()
 
-            train_outputs = model(train_inputs)
+            train_outputs, train_output_supports = model(train_inputs)
 
             train_loss = loss_function(train_outputs)
+            train_support_loss = support_loss_function(input=train_output_supports[mask], target=supports[mask].to(device))
+
+            if not torch.isnan(train_support_loss):
+                train_loss = args.alpha * train_loss + (1 - args.alpha) * train_support_loss
+
             train_loss.backward()
 
             optimizer.step()
 
             temp_train_result = (f'{task_name}\t'
                                  f'epoch/epochs:{epoch + 1}/{epochs}\t'
-                                 f'{coloring("train_loss", "red_bg")}:{train_loss.item()}')
+                                 f'{coloring("train_loss", "red_bg")}:{train_loss.item()}\t'
+                                 f'{coloring("train_support_loss", "green_bg")}:{train_support_loss.item()}')
             with open(mkdir(temp_train_tsv), 'a' if os.path.exists(temp_train_tsv) else 'w') as f:
                 f.write(decoloring(temp_train_result) + '\n')
 
             if n % step == 0:
                 predictions = []
                 for dev_sample in dev_dataloader:
-                    dev_inputs, _ = dev_sample
+                    dev_inputs, _, _ = dev_sample
                     with torch.no_grad():
-                        dev_outputs = model(dev_inputs).detach().cpu()
+                        dev_outputs = model(dev_inputs)[0].detach().cpu()
                         predictions.append(dev_outputs)
                 y_pred = torch.cat(predictions, dim=0).numpy()
                 y_true = dev_dataloader.label
@@ -279,9 +290,9 @@ def eval_ranking_metrics_on_data_frame(
 def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
     predictions = []
     for test_sample in test_dataloader:
-        test_inputs, _ = test_sample
+        test_inputs, _, _ = test_sample
         with torch.no_grad():
-            test_outputs = model(test_inputs).detach().cpu()
+            test_outputs = model(test_inputs)[0].detach().cpu()
             predictions.append(test_outputs)
     y_pred = torch.cat(predictions, dim=0).numpy()
     y_true = test_dataloader.label
@@ -317,6 +328,8 @@ def parse_args():
     parser.add_argument('--task_name', nargs='?', default='OM_wo_SQA',
                         help='Task name')
 
+    parser.add_argument('--alpha', type=float, default=0.8,
+                        help='Alpha')
     parser.add_argument('--batch_size', type=int, default=4,
                         help='Batch size')
     parser.add_argument('--bert_hidden_size', type=int, default=768,
@@ -349,9 +362,11 @@ def parse_args():
                         help='Limit')
     parser.add_argument('--lr', type=float, default=2e-5,
                         help='Learning rate')
+    parser.add_argument('--margin', type=float, default=5,
+                        help='Margin')
     parser.add_argument('--max_length', type=int, default=256,
                         help='Max length')
-    parser.add_argument('--max_seq_length', type=int, default=32,
+    parser.add_argument('--max_seq_length', type=int, default=5,
                         help='Max sequence length')
     parser.add_argument('--normalize', type=bool, default=True,
                         help='Normalize')
@@ -472,7 +487,7 @@ def main():
     if args.is_from_finetuned:
         model.load_state_dict(torch.load(args.finetuned_model_path))
     if args.is_train:
-        model, timestamp = train(args, args.task_name, model, train_dataloader, test_dataloader, args.epochs, args.lr, args.step)
+        model, timestamp = train(args, args.task_name, model, train_dataloader, test_dataloader, args.epochs, args.lr, device, args.step)
 
     evaluate(args, args.task_name, model, test_dataloader, timestamp, args.save_test)
 
