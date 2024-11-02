@@ -21,6 +21,7 @@ class Distribution:
         self.num_of_accepted_answers_with_the_highest_scores = 0
         self.num_of_answers_for_questions_with_accepted_answer = 0
         self.num_of_answers_for_questions_without_accepted_answer = 0
+        self.num_of_answers_with_comments_more_than_2 = 0
 
         self.num_of_comments_on_questions_with_accepted_answer = 0
         self.num_of_comments_on_questions_without_accepted_answer = 0
@@ -71,6 +72,9 @@ class Distribution:
                 else:
                     self.num_of_comments_on_un_accepted_answers += temp_num_of_comments_for_answer
 
+                if temp_num_of_comments_for_answer > 2:
+                    self.num_of_answers_with_comments_more_than_2 += 1
+
             if exist_accepted_answer is False:
                 self.num_of_questions_without_accepted_answer += 1
                 self.num_of_answers_for_questions_without_accepted_answer += temp_num_of_answers_for_question
@@ -112,6 +116,7 @@ class Distribution:
         self.cprint('#Accepted Answers with the Highest Scores:', self.num_of_accepted_answers_with_the_highest_scores)
         self.cprint('#Answers for questions with accepted answer:', self.num_of_answers_for_questions_with_accepted_answer)
         self.cprint('#Answers for questions without accepted answer:', self.num_of_answers_for_questions_without_accepted_answer)
+        self.cprint('#Answers with comments more than 2:', self.num_of_answers_with_comments_more_than_2)
         self.cprint('#Comments on questions with accepted answer:', self.num_of_comments_on_questions_with_accepted_answer)
         self.cprint('#Comments on questions without accepted answer:', self.num_of_comments_on_questions_without_accepted_answer)
         self.cprint('#Comments on accepted answers:', self.num_of_comments_on_accepted_answers)
