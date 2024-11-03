@@ -26,6 +26,7 @@ Writing test_10_fold XML file: 100%|███████████| 92/92 [00
 import re
 import xml.etree.ElementTree as ElementTree
 import xml.dom.minidom as minidom
+from typing import Optional
 
 from sklearn.model_selection import KFold
 from tqdm import tqdm
@@ -54,6 +55,7 @@ class Split:
             if len(answers) >= self.threshold:
                 elems.append(elem)
 
+        self.write_file(elems, 'All', None)
         for i, (train_index, test_index) in enumerate(self.kf.split(elems)):
             train_elems = [elems[j] for j in train_index]
             test_elems = [elems[j] for j in test_index]
@@ -61,7 +63,7 @@ class Split:
             self.write_file(train_elems, 'Train', i)
             self.write_file(test_elems, 'Test', i)
 
-    def write_file(self, elems: list, mode: str, fold: int):
+    def write_file(self, elems: list, mode: str, fold: Optional[int]):
         for thread in tqdm(elems, desc=f"Writing {mode.lower()}_{fold+1}_fold XML file"):
             string = (re.sub(
                 r'> *\n +', '>', minidom.parseString(
@@ -73,8 +75,12 @@ class Split:
                       replace('\n            \n', '\n').
                       replace('\n                \n', '\n'))
 
-            with open(f"./{self.data_name}/{mode}/{mode.lower()}_{fold+1}_fold.xml", 'a', encoding='utf-8') as f:
-                f.write(string)
+            if fold is not None:
+                with open(f"./{self.data_name}/{mode}/{mode.lower()}_{fold+1}_fold.xml", 'a', encoding='utf-8') as f:
+                    f.write(string)
+            else:
+                with open(f"./{self.data_name}/{mode}/{mode.lower()}.xml", 'a', encoding='utf-8') as f:
+                    f.write(string)
 
     @staticmethod
     def iterparse(filepath: str, limit: int):
