@@ -87,9 +87,20 @@ class OurDataset(Dataset):
         for _ in range(left_df.shape[0]):
             data_pack.left.iloc[_]['text_left'] = left_features[_]
 
+        # rel_left
+        rel_left_df = dp.rel_left
+        rel_left_features = tokenizer(
+            rel_left_df['rel_text_left'].tolist(),
+            padding='max_length',
+            truncation=True,
+            max_length=max_length,
+            return_tensors='pt'
+        )['input_ids']
+        for _ in range(rel_left_df.shape[0]):
+            data_pack.rel_left.iloc[_]['rel_text_left'] = rel_left_features[_]
+
         # right
         right_df = dp.right
-
         right_features = tokenizer(
             [text if text is not None else '' for text in right_df['text_right'].tolist()],
             padding='max_length',
@@ -284,8 +295,7 @@ class OurDataset(Dataset):
         return new_relation
 
 
-
-def main():
+def situation1():
     set_seed(2024)
 
     data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
@@ -324,6 +334,51 @@ def main():
     )
     print(len(test_dataset))
     # print(test_dataset[0])
+
+
+def situation2():
+    set_seed(2024)
+
+    data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Situation2'
+    data_name = 'meta.stackoverflow.com'
+
+    spacy_path = "/data/cuifulai/Spacy/en_core_web_sm-3.7.1/en_core_web_sm/en_core_web_sm-3.7.1"
+    nlp = spacy.load(spacy_path)
+    argument_quality = ArgumentQuality(nlp)
+
+    pretrained_model_path = '/data/cuifulai/PretrainedModel/bert-base-uncased'
+    tokenizer = AutoTokenizer.from_pretrained(pretrained_model_path)
+
+    all_dp = OurProcessor(
+        data_name=data_name,
+        stage='test',
+        task='ranking',
+        filtered=False,
+        threshold=5,
+        normalize=True,
+        return_classes=False,
+        limit=0,
+        max_length=256,
+        max_seq_length=5,
+        mode='accept',
+        situation=2,
+    ).get_all_examples(data_dir)
+
+    all_dataset = OurDataset(
+        argument_quality=argument_quality,
+        tokenizer=tokenizer,
+        data_pack=all_dp,
+        mode='point',
+        batch_size=4,
+        resample=False,
+        shuffle=False,
+        max_length=256
+    )
+    print(len(all_dataset))
+
+
+def main():
+    situation2()
 
 
 if __name__ == '__main__':

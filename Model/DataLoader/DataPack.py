@@ -27,6 +27,7 @@ class DataPack:
             self,
             relation: pd.DataFrame,
             left: pd.DataFrame,
+            rel_left: pd.DataFrame,
             right_id: pd.DataFrame,
             right: pd.DataFrame,
             comment: pd.DataFrame,
@@ -39,6 +40,7 @@ class DataPack:
     ):
         self._relation = relation
         self._left = left
+        self._rel_left = rel_left
         self._right_id = right_id
         self._right = right
         self._comment = comment
@@ -109,6 +111,7 @@ class DataPack:
         index = _convert_to_list_index(index, len(self))
         relation = self._relation.loc[index].reset_index(drop=True)
         left = self._left.loc[relation['id_left'].unique()]
+        rel_left = self._rel_left.loc[relation['id_left'].unique()]
         right_id = self._right_id.loc[relation['id_right'].unique()]
         right = self._right.loc[relation['id_right'].unique()]
         comment = self._comment.loc[relation['id_right'].unique()]
@@ -118,6 +121,7 @@ class DataPack:
         return DataPack(
             relation=relation.copy(),
             left=left.copy(),
+            rel_left=rel_left.copy(),
             right_id=right_id.copy(),
             right=right.copy(),
             comment=comment.copy(),
@@ -140,6 +144,10 @@ class DataPack:
     @property
     def left(self) -> pd.DataFrame:
         return self._left
+
+    @property
+    def rel_left(self) -> pd.DataFrame:
+        return self._rel_left
 
     @property
     def right_id(self) -> pd.DataFrame:
@@ -181,6 +189,7 @@ class DataPack:
         return DataPack(
             relation=self._relation.copy(),
             left=self._left.copy(),
+            rel_left=self._rel_left.copy(),
             right_id=self._right_id.copy(),
             right=self._right.copy(),
             comment=self._comment.copy(),
@@ -247,6 +256,7 @@ class DataPack:
 
         self._relation = self._relation.drop(empty_id)
         self._left = self._left.drop(empty_left_id)
+        self._rel_left = self._rel_left.drop(empty_left_id)
         self._right_id = self._right_id.drop(empty_right_id)
         self._right = self._right.drop(empty_right_id)
         self._comment = self._comment.drop(empty_right_id)
@@ -329,6 +339,7 @@ class DataPack:
             dp = self._data_pack
             index = _convert_to_list_index(index, len(dp))
             left_df = dp.left.loc[dp.relation['id_left'][index]].reset_index()
+            rel_left_df = dp.rel_left.loc[dp.relation['id_left'][index]].reset_index()
             right_id_df = dp.right_id.loc[dp.relation['id_right'][index]].reset_index()
             right_df = dp.right.loc[dp.relation['id_right'][index]].reset_index()
             comment_df = dp.comment.loc[dp.relation['id_right'][index]].reset_index()
@@ -341,6 +352,8 @@ class DataPack:
                     labels = dp.relation[column][index].to_frame()
                     labels = labels.reset_index(drop=True)
                     joined_table = joined_table.join(labels)
+            joined_table = joined_table.join(rel_left_df, rsuffix='_rel_left')
+            joined_table.drop(columns=['id_left_rel_left'], inplace=True)
             joined_table = joined_table.join(right_id_df, rsuffix='_right_id')
             joined_table.drop(columns=['id_right_right_id'], inplace=True)
             joined_table = joined_table.join(comment_df, rsuffix='_comment')

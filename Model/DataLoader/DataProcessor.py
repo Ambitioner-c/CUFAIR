@@ -88,6 +88,7 @@ class OurProcessor(DataProcessor, ABC):
             mode: Optional[str] = 'accept',
             fold: int = 1,
             min_seq_length: int = 1,
+            situation: int = 1,
     ):
         super(OurProcessor).__init__()
 
@@ -106,9 +107,13 @@ class OurProcessor(DataProcessor, ABC):
         self.mode = mode
         self.fold = fold
         self.min_seq_length = min_seq_length
+        self.situation = situation
 
     def get_all_examples(self, data_dir: str) -> DataPack:
-        return self.create_examples(os.path.join(data_dir, self.data_name, self.data_name))
+        if self.situation == 1:
+            return self.create_examples(os.path.join(data_dir, self.data_name, self.data_name))
+        elif self.situation == 2:
+            return self.create_examples(os.path.join(data_dir, self.data_name))
 
     def get_train_examples(self, data_dir: str) -> DataPack:
         return self.create_examples(os.path.join(data_dir, self.data_name, 'Train', f'train_{self.fold}_fold'))
@@ -122,6 +127,7 @@ class OurProcessor(DataProcessor, ABC):
     def create_examples(self, filepath: str) -> DataPack:
         text_left_ids: list = []
         text_lefts: list = []
+        rel_text_lefts: list = []
         text_right_ids: list = []
         text_rights: list = []
         labels: list = []
@@ -134,20 +140,17 @@ class OurProcessor(DataProcessor, ABC):
         for _, elem in tqdm(self._iterparse(filepath + '.xml', self.limit), desc=f'Parsing {coloring(filepath, "red")} XML file'):
             temp_text_left_ids = []
             temp_text_lefts = []
+            temp_rel_text_lefts = []
             temp_text_right_ids = []
             temp_text_rights = []
             temp_labels = []
             temp_supports = []
             temp_comments = []
             temp_pings = []
+            temp_extends = []
 
             # Question
             question = elem.find('Question')
-            q_id: str = question.attrib['ID']
-            q_name: str = question.attrib['OWNER_DISPLAY_NAME']
-            q_date: str = question.attrib['CREATION_DATE']
-            q_title: str = question.find('QTitle').text
-            q_body: str = question.find('QBody').text
 
             a_ids: list = []
             a_dates: list = []
@@ -164,6 +167,12 @@ class OurProcessor(DataProcessor, ABC):
             # Answers
             answers = elem.findall('Answer')
             for __, answer in enumerate(answers):
+                q_id: str = question.attrib['ID']
+                q_name: str = question.attrib['OWNER_DISPLAY_NAME']
+                q_date: str = question.attrib['CREATION_DATE']
+                q_title: str = question.find('QTitle').text
+                q_body: str = question.find('QBody').text
+
                 a_id = answer.attrib['ID']
                 a_date = answer.attrib['CREATION_DATE']
                 a_accepted = answer.attrib['ACCEPTED_ANSWER']
@@ -173,6 +182,10 @@ class OurProcessor(DataProcessor, ABC):
                 except KeyError:
                     a_support = '-1'
                 a_support = float(a_support)
+                try:
+                    rel_question = answer.find('Question')
+                except AttributeError:
+                    rel_question = None
                 a_body = answer.find('ABody').text
                 a_ids.append(a_id)
                 a_dates.append(a_date)
@@ -205,6 +218,10 @@ class OurProcessor(DataProcessor, ABC):
 
                 temp_text_left_ids.append(q_id)
                 temp_text_lefts.append(q_body)
+                if rel_question is not None:
+                    temp_rel_text_lefts.append(rel_question.find('QBody').text)
+                else:
+                    temp_rel_text_lefts.append(q_body)
                 temp_text_right_ids.append(a_ids[__])
                 temp_text_rights.append(a_bodys[__])
                 if self.mode == 'score':
@@ -215,7 +232,32 @@ class OurProcessor(DataProcessor, ABC):
                 temp_comments.append(c_bodys[__])
                 temp_pings.append(a_pings[__])
 
-            assert len(temp_text_left_ids) == len(temp_text_lefts) == len(temp_text_right_ids) == len(temp_text_rights) == len(temp_labels) == len(temp_supports) == len(temp_comments) == len(temp_pings)
+                if rel_question is not None:
+                    q_id = rel_question.attrib['ID']
+                    q_name = rel_question.attrib['OWNER_DISPLAY_NAME']
+                    q_date = rel_question.attrib['CREATION_DATE']
+                    q_title = rel_question.find('QTitle').text
+                    q_body = rel_question.find('QBody').text
+                extend = {
+                    'QID': q_id,
+                    'QName': q_name,
+                    'QDate': q_date,
+                    'QTitle': q_title,
+                    'QBody': q_body,
+                    'AIDs': a_ids,
+                    'ADates': a_dates,
+                    'ABodys': a_bodys,
+                    'AAccepteds': a_accepteds,
+                    'AScores': a_scores,
+                    'AParticipants': a_participants,
+                    'APings': a_pings,
+                    'CScores': c_scores,
+                    'CDates': c_dates,
+                    'CBody': c_bodys,
+                }
+                temp_extends.append(extend)
+
+            assert len(temp_text_left_ids) == len(temp_text_lefts) == len(temp_rel_text_lefts) == len(temp_text_right_ids) == len(temp_text_rights) == len(temp_labels) == len(temp_supports) == len(temp_comments) == len(temp_pings) == len(temp_extends)
             if len(temp_labels) < self.threshold:
                 continue
 
@@ -232,27 +274,9 @@ class OurProcessor(DataProcessor, ABC):
                 elif self.mode == 'accept':
                     temp_labels = [float(label) for label in temp_labels]
 
-            extend = {
-                'QID': q_id,
-                'QName': q_name,
-                'QDate': q_date,
-                'QTitle': q_title,
-                'QBody': q_body,
-                'AIDs': a_ids,
-                'ADates': a_dates,
-                'ABodys': a_bodys,
-                'AAccepteds': a_accepteds,
-                'AScores': a_scores,
-                'AParticipants': a_participants,
-                'APings': a_pings,
-                'CScores': c_scores,
-                'CDates': c_dates,
-                'CBody': c_bodys,
-            }
-            temp_extends = [extend] * len(temp_labels)
-
             text_left_ids.extend(temp_text_left_ids)
             text_lefts.extend(temp_text_lefts)
+            rel_text_lefts.extend(temp_rel_text_lefts)
             text_right_ids.extend(temp_text_right_ids)
             text_rights.extend(temp_text_rights)
             labels.extend(temp_labels)
@@ -265,6 +289,7 @@ class OurProcessor(DataProcessor, ABC):
         df = pd.DataFrame({
             'left_id': text_left_ids,
             'text_left': text_lefts,
+            'rel_text_left': rel_text_lefts,
             'right_id': text_right_ids,
             'text_right': text_rights,
             'label': labels,
@@ -299,6 +324,7 @@ class OurProcessor(DataProcessor, ABC):
 
         # Build Left and Right
         left = self._merge(df, id_left, 'text_left', 'id_left')
+        rel_left = self._merge(df, id_left, 'rel_text_left', 'id_left')
         right_id = self._merge(df, id_right, 'right_id', 'id_right')
         right = self._merge(df, id_right, 'text_right', 'id_right')
         comment = self._merge(df, id_right, 'comment', 'id_right')
@@ -306,7 +332,7 @@ class OurProcessor(DataProcessor, ABC):
         extend = self._merge(df, id_left, 'extend', 'id_left')
         feature = self._merge(df, id_right, 'feature', 'id_right')
 
-        return DataPack(relation, left, right_id, right, comment, ping, extend, feature, self.max_length, self.max_seq_length, self.min_seq_length)
+        return DataPack(relation, left, rel_left, right_id, right, comment, ping, extend, feature, self.max_length, self.max_seq_length, self.min_seq_length)
 
     @staticmethod
     def _merge(data: pd.DataFrame, ids: typing.Union[list, np.array], text_label: str, id_label: str):
@@ -347,7 +373,7 @@ class OurProcessor(DataProcessor, ABC):
                     idx += 1
 
 
-def main():
+def situation1():
     set_seed(2024)
 
     data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
@@ -386,6 +412,33 @@ def main():
         fold=fold,
     ).get_test_examples(data_dir)
     print(f'test_{fold}_fold', test_dp.frame().shape)
+
+
+def situation2():
+    set_seed(2024)
+
+    data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Situation2'
+    data_name = 'meta.stackoverflow.com'
+
+    all_dp = OurProcessor(
+        data_name=data_name,
+        stage='test',
+        task='ranking',
+        filtered=False,
+        threshold=5,
+        normalize=True,
+        return_classes=False,
+        limit=0,
+        max_length=256,
+        max_seq_length=5,
+        mode='accept',
+        situation=2,
+    ).get_all_examples(data_dir)
+    print(f'all_fold', all_dp.frame().shape)
+
+
+def main():
+    situation2()
 
 
 if __name__ == '__main__':

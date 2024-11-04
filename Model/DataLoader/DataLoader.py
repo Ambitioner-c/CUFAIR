@@ -79,7 +79,7 @@ class DataLoader:
             yield batch_x, batch_y, batch_support
 
 
-def main():
+def situation1():
     set_seed(2024)
 
     data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange'
@@ -124,6 +124,58 @@ def main():
     for example in test_dataloader:
         print(example)
         exit()
+
+
+def situation2():
+    set_seed(2024)
+
+    data_dir = '/home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Situation2'
+    data_name = 'meta.stackoverflow.com'
+
+    spacy_path = "/data/cuifulai/Spacy/en_core_web_sm-3.7.1/en_core_web_sm/en_core_web_sm-3.7.1"
+    nlp = spacy.load(spacy_path)
+    argument_quality = ArgumentQuality(nlp)
+
+    pretrained_model_path = '/data/cuifulai/PretrainedModel/bert-base-uncased'
+    tokenizer = AutoTokenizer.from_pretrained(pretrained_model_path)
+
+    all_dp = OurProcessor(
+        data_name=data_name,
+        stage='test',
+        task='ranking',
+        filtered=False,
+        threshold=5,
+        normalize=True,
+        return_classes=False,
+        limit=0,
+        max_length=256,
+        max_seq_length=5,
+        mode='accept',
+        situation=2,
+    ).get_all_examples(data_dir)
+
+    all_dataset = OurDataset(
+        argument_quality=argument_quality,
+        tokenizer=tokenizer,
+        data_pack=all_dp,
+        mode='point',
+        batch_size=4,
+        resample=False,
+        shuffle=False,
+        max_length=256
+    )
+
+    all_dataloader = DataLoader(
+        all_dataset,
+        stage='test'
+    )
+    for example in all_dataloader:
+        print(example)
+        exit()
+
+
+def main():
+    situation2()
 
 
 if __name__ == '__main__':
