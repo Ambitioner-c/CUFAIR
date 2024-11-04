@@ -2,6 +2,7 @@
 # @Author: Fulai Cui (cuifulai@mail.hfut.edu.cn)
 # @Time: 2024/10/8 14:32
 import argparse
+import re
 import typing
 from collections import Counter
 
@@ -287,7 +288,7 @@ def main():
         ci_mode=args.ci_mode,
     ).to(device)
 
-    timestamp = None
+    timestamp = re.findall(r'-(\d+_\d+)/', args.finetuned_model_path)[0]
     if args.is_from_finetuned:
         model.load_state_dict(torch.load(args.finetuned_model_path))
 
