@@ -2,8 +2,8 @@
 # @Author: Fulai Cui (cuifulai@mail.hfut.edu.cn)
 # @Time: 2024/10/8 14:32
 import argparse
-import os
 import typing
+from collections import Counter
 
 import numpy as np
 import pandas as pd
@@ -20,12 +20,7 @@ from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 
 from warnings import simplefilter
 
-from Model.Unit.cprint import coloring, decoloring
-from Model.Unit.function import mkdir, ignore_warning
-from Model.Unit.metrics import (
-    precision, average_precision, mean_average_precision, mean_reciprocal_rank,
-    discounted_cumulative_gain, normalized_discounted_cumulative_gain
-)
+from Model.Unit.function import ignore_warning
 
 simplefilter(action='ignore', category=FutureWarning)
 simplefilter(action='ignore', category=UserWarning)
@@ -121,89 +116,45 @@ class OurModel(nn.Module):
         return outputs, self.community_support_layer(source_credibility)
 
 
-def get_ranking_metrics(input: np.array, target: np.array, threshold: float = 0.) -> tuple:
-    p_1 = precision(input, target, k=1, threshold=threshold)
-    p_3 = precision(input, target, k=3, threshold=threshold)
-    p_5 = precision(input, target, k=5, threshold=threshold)
-    ap = average_precision(input, target, threshold=threshold)
-    map_ = mean_average_precision(input, target, threshold=threshold)
-    mrr = mean_reciprocal_rank(input, target, threshold=threshold)
-    dcg_1 = discounted_cumulative_gain(input, target, k=1, threshold=threshold)
-    dcg_3 = discounted_cumulative_gain(input, target, k=3, threshold=threshold)
-    dcg_5 = discounted_cumulative_gain(input, target, k=5, threshold=threshold)
-    ndcg_1 = normalized_discounted_cumulative_gain(input, target, k=1, threshold=threshold)
-    ndcg_3 = normalized_discounted_cumulative_gain(input, target, k=3, threshold=threshold)
-    ndcg_5 = normalized_discounted_cumulative_gain(input, target, k=5, threshold=threshold)
-
-    return (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5)
-
-
-def eval_ranking_metrics_on_data_frame(
-        id_left: typing.Any,
-        y_true: typing.Union[list, np.array],
-        y_pred: typing.Union[list, np.array]
+def get_top_1(
+        id_lefts: typing.Any,
+        y_preds: typing.Union[list, np.array],
 ):
     df = pd.DataFrame(
         data={
-            'id': id_left,
-            'true': y_true,
-            'pred': y_pred
+            'id': id_lefts,
+            'pred': y_preds
         }
     )
+    result = df.groupby(by='id')['pred'].idxmax().reset_index(name='idxmax')
 
-    metrics = df.groupby(by='id').apply(
-        lambda x: get_ranking_metrics(input=x['pred'].values, target=x['true'].values)
-    )
-    p_1 = metrics.apply(lambda x: x[0][0]).mean()
-    p_3 = metrics.apply(lambda x: x[0][1]).mean()
-    p_5 = metrics.apply(lambda x: x[0][2]).mean()
-    ap = metrics.apply(lambda x: x[0][3]).mean()
-    map_ = metrics.apply(lambda x: x[0][4]).mean()
-    mrr = metrics.apply(lambda x: x[1]).mean()
-    dcg_1 = metrics.apply(lambda x: x[2][0]).mean()
-    dcg_3 = metrics.apply(lambda x: x[2][1]).mean()
-    dcg_5 = metrics.apply(lambda x: x[2][2]).mean()
-    ndcg_1 = metrics.apply(lambda x: x[3][0]).mean()
-    ndcg_3 = metrics.apply(lambda x: x[3][1]).mean()
-    ndcg_5 = metrics.apply(lambda x: x[3][2]).mean()
+    counts = dict(Counter(id_lefts))
+    start_points = {}
+    for idx in range(100):
+        if idx == 0:
+            start_points[f'L-{idx}'] = 0
+        else:
+            start_points[f'L-{idx}'] = start_points[f'L-{idx-1}'] + counts[f'L-{idx-1}']
 
-    return (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5)
+    result['idxmax'] = result.apply(lambda x: x['idxmax'] - start_points[x['id']], axis=1)
+
+    return result
 
 
-def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
+def evaluate(args, task_name, model, test_dataloader, timestamp):
     predictions = []
     for test_sample in test_dataloader:
         test_inputs, _, _ = test_sample
         with torch.no_grad():
             test_outputs = model(test_inputs)[0].detach().cpu()
             predictions.append(test_outputs)
-    y_pred = torch.cat(predictions, dim=0).numpy()
-    y_true = test_dataloader.label
-    id_left = test_dataloader.id_left
-    (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5) = (
-        eval_ranking_metrics_on_data_frame(id_left, y_true, y_pred.squeeze(axis=-1)))
-    best_test_result = (
-        f'{task_name}\t'
-        f'Ranking:\t'
-        f'{coloring("p@1", "red_bg")}:{round(p_1, 4)}\t'
-        f'{coloring("p@3", "red_bg")}:{round(p_3, 4)}\t'
-        f'{coloring("p@5", "red_bg")}:{round(p_5, 4)}\t'
-        f'{coloring("ap", "green_bg")}:{round(ap, 4)}\t'
-        f'{coloring("map", "yellow_bg")}:{round(map_, 4)}\t'
-        f'{coloring("mrr", "blue_bg")}:{round(mrr, 4)}\t'
-        f'dcg@1:{round(dcg_1, 4)}\t'
-        f'dcg@3:{round(dcg_3, 4)}\t'
-        f'dcg@5:{round(dcg_5, 4)}\t'
-        f'{coloring("ndcg@1", "purple_bg")}:{round(ndcg_1, 4)}\t'
-        f'{coloring("ndcg@3", "purple_bg")}:{round(ndcg_3, 4)}\t'
-        f'{coloring("ndcg@5", "purple_bg")}:{round(ndcg_5, 4)}'
-    )
-    if args.is_train or save_test:
-        best_test_tsv = f'./Result/Temp/{task_name}-{timestamp}/best_test.tsv'
-        with open(mkdir(best_test_tsv), 'a' if os.path.exists(best_test_tsv) else 'w') as f:
-            f.write(decoloring(best_test_result) + '\n')
-    print(best_test_result)
-    print(f'{p_1}\t{p_3}\t{p_5}\t{ap}\t{map_}\t{mrr}\t{dcg_1}\t{dcg_3}\t{dcg_5}\t{ndcg_1}\t{ndcg_3}\t{ndcg_5}')
+    y_preds = torch.cat(predictions, dim=0).numpy()
+    id_lefts = test_dataloader.id_left
+
+    result = get_top_1(id_lefts, y_preds.squeeze(axis=-1))
+
+    if args.save_test:
+        result.to_csv(f'./Result/Situation2/{task_name}-{timestamp}.csv', index=False)
 
 
 def parse_args():
@@ -267,7 +218,7 @@ def parse_args():
                         help='Number of layers')
     parser.add_argument('--pretrained_model_path', nargs='?', default='/data/cuifulai/PretrainedModel/bert-base-uncased',
                         help='Pretrained model path')
-    parser.add_argument('--save_test', type=bool, default=False,
+    parser.add_argument('--save_test', type=bool, default=True,
                         help='Save test')
     parser.add_argument('--seed', type=int, default=2024,
                         help='Random seed')
@@ -340,7 +291,7 @@ def main():
     if args.is_from_finetuned:
         model.load_state_dict(torch.load(args.finetuned_model_path))
 
-    evaluate(args, args.task_name, model, all_dataloader, timestamp, args.save_test)
+    evaluate(args, args.task_name, model, all_dataloader, timestamp)
 
 if __name__ == '__main__':
     main()
