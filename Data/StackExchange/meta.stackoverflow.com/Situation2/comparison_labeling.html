@@ -111,6 +111,21 @@
                 table += '</table>';
 
                 commentSection.innerHTML = table;
+
+
+                // 记录用户选择
+                document.getElementById('optionSelect').value = '0';
+                document.getElementById('optionSelect').onchange = function () {
+                    selections[page] = {
+                        page_index: page,
+                        selected_option: this.value
+                    };
+                    console.log(selections); // 调试输出
+
+                    // 更新结果字符串
+                    resultString = selections.map(sel => `PageIndex:${sel.page_index},SelectedOption:${sel.selected_option}`).join('\n');
+                    console.log(resultString)
+                }
             }
         }
 
@@ -227,11 +242,8 @@
         <label for="optionSelect">Choose an option:</label>
         <select id="optionSelect">
             <option value="0">待选择</option>
-            <option value="1">强烈反对</option>
-            <option value="2">反对</option>
-            <option value="3">中立</option>
-            <option value="4">支持</option>
-            <option value="5">强烈支持</option>
+            <option value="1">Left is better</option>
+            <option value="2">Right is better</option>
         </select>
     </div>
     <div class="navigation">
