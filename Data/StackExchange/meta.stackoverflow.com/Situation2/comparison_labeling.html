@@ -206,6 +206,9 @@
     <div class="question-container">
         <h2>File</h2>
         <input type="file" id="fileInput" accept=".csv" onchange="handleFileSelect(event, 'data')">
+        <div>
+            <p><strong>1. Read the question, two different answers, and the comments on the answers.</strong></p>
+        </div>
 
         <p><em>Questioner Name:</em> <u><span id="questioner_name"></span></u></p>
         <p><em>Creation Date:</em> <span id="question_time"></span></p>
@@ -230,6 +233,9 @@
         </div>
     </div>
 
+    <div>
+        <p><strong>2. Choose one of the two answers that you consider relatively better.</strong></p>
+    </div>
     <div class="select-option">
         <label for="optionSelect">Choose an option:</label>
         <select id="optionSelect">
