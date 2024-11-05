@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Community Support Labeling</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .navigation {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        #fileInput {
+            margin-bottom: 20px;
+        }
+
+        .comment-section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .highlight {
+            /*color: red;*/
+            font-weight: bold;
+        }
+
+        .select-option {
+            margin: 20px 0;
+            text-align: center;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script>
+        let currentPage = 0;
+        let data = [];
+        let selections = [];
+        let resultString = '';
+
+        function renderPage(page) {
+            if (data.length > 0) {
+                const questionID = data[page].question_id || 'N/A';
+                const questionerName = data[page].questioner_name || 'N/A';
+                const questionTime = data[page].question_time || 'N/A';
+                const question = data[page].question || 'N/A';
+                const answerID = data[page].answer_id || 'N/A';
+                const answererName = data[page].answerer_name || 'N/A';
+                const answerTime = data[page].answer_time || 'N/A';
+                const answer = data[page].answer || 'N/A';
+
+                document.getElementById("questioner_name").innerText = questionerName;
+                document.getElementById("question_time").innerText = questionTime;
+                document.getElementById("question").innerText = question;
+                document.getElementById("answerer_name").innerText = answererName;
+                document.getElementById("answer_time").innerText = answerTime;
+                document.getElementById("answer").innerText = answer;
+
+                // Clear previous comments
+                const commentSection = document.getElementById("comment-section");
+                commentSection.innerHTML = ""; // Clear previous comments
+
+                // Parse comments
+                let commenterNames = data[page].commenter_name || '';
+                let commentTimes = data[page].comment_time || '';
+                let comments = data[page].comment || '';
+                commenterNames = commenterNames.split('--Fulai Cui--').map(name => name.trim());
+                commentTimes = commentTimes.split('--Fulai Cui--').map(time => time.trim());
+                comments = comments.split('--Fulai Cui--').map(comment => comment.trim());
+
+                const commentsData = commenterNames.map((name, index) => ({
+                    name: name,
+                    time: commentTimes[index],
+                    comment: comments[index]
+                }));
+
+                // console.log('commentsData',commentsData);
+
+                let table = '<table border="1"><tr><th>Time</th><th>Commenter</th><th>Comment</th></tr>';
+                commentsData.forEach(item => {
+                    let commentText = item.comment.split(' ').map(word => {
+                        if (word.startsWith('@')) {
+                            return `<span class="highlight">${word}</span>`;
+                        }
+                        return word;
+                    }).join(' ');
+
+                    table += `<tr><td style="width: 15%;text-align:center">${item.time}</td><td style="width: 20%;text-align:center">${item.name}</td><td style="width: 65%;">${commentText}</td></tr>`;
+                });
+                table += '</table>';
+
+                commentSection.innerHTML = table;
+
+                // 记录用户选择
+                document.getElementById('optionSelect').value = '0'; // 重置选择框
+                document.getElementById('optionSelect').onchange = function() {
+                    selections[page] = {
+                        page_index: page,
+                        question_id: questionID,
+                        answer_id: answerID,
+                        selected_option: this.value
+                    };
+                    console.log(selections); // 调试输出三元组
+
+                    // 更新结果字符串
+                    resultString = selections.map(sel => `PageIndex:${sel.page_index},QuestionID:${sel.question_id},AnswerID:${sel.answer_id},SelectedOption:${sel.selected_option}`).join('\n');
+                    console.log(resultString)
+                };
+
+
+            }
+        }
+
+        function nextPage() {
+            if (document.getElementById('optionSelect').value === '0') {
+                alert("请先选择一个选项。");
+                return;
+            }
+            if (currentPage < data.length - 1) {
+                currentPage++;
+                renderPage(currentPage);
+            }
+            else {
+                alert("已经是最后一页。");
+
+                // 自动下载selections结果
+                const blob = new Blob([resultString], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const downloadLink = document.createElement('a');
+                downloadLink.href = url;
+                downloadLink.download = 'selections.txt';
+                downloadLink.click(); // 触发下载
+                URL.revokeObjectURL(url); // 释放URL对象
+            }
+        }
+
+        function previousPage() {
+            if (currentPage > 0) {
+                currentPage--;
+                renderPage(currentPage);
+            }
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                Papa.parse(file, {
+                    header: true,
+                    complete: function (results) {
+                        console.log(results.data); // For debugging
+                        data = results.data;
+                        if (data.length > 0) {
+                            currentPage = 0;
+                            renderPage(currentPage);
+                        } else {
+                            alert("CSV文件中没有有效数据。");
+                        }
+                    },
+                    error: function (err) {
+                        console.error("解析错误:", err);
+                    }
+                });
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Community Support Labeling</h1>
+        <input type="file" id="fileInput" accept=".csv" onchange="handleFileSelect(event)">
+        <div>
+            <p><strong>1. Read the question, the answer, and the answer's comments.</strong></p>
+        </div>
+        <p>
+            <em>Questioner Name:</em>
+            <u><span id="questioner_name"></span></u>
+        </p>
+        <p>
+            <em>Creation Date:</em>
+            <span id="question_time"></span>
+        </p>
+        <p>
+            <em>Question:</em>
+            <span id="question"></span>
+        </p>
+        <p>
+            <em>Answerer Name:</em>
+            <u><span id="answerer_name"></span></u>
+        </p>
+        <p>
+            <em>Creation Date:</em>
+            <span id="answer_time"></span>
+        </p>
+        <p>
+            <em>Answer:</em>
+            <span id="answer"></span>
+        </p>
+        <p><em>Comments:</em></p>
+        <p>Note: <strong>@name</strong><em> can be used anywhere in the comments to reply to a specific user that has appeared earlier.</em></p>
+        <div class="comment-section" id="comment-section"></div>
+
+        <div>
+            <p><strong>2. As time progresses, understand the possible discussions that may arise in the comments. Then evaluate the extent to which these comments support the answer. Please select an option from the dropdown menu.</strong></p>
+        </div>
+        <div class="select-option">
+            <label for="optionSelect">Choose an option:</label>
+            <select id="optionSelect">
+                <option value="0">待选择</option>
+                <option value="1">强烈反对</option>
+                <option value="2">反对</option>
+                <option value="3">中立</option>
+                <option value="4">支持</option>
+                <option value="5">强烈支持</option>
+            </select>
+        </div>
+        <div class="navigation">
+            <button onclick="previousPage()">Previous</button>
+            <button onclick="nextPage()">Next</button>
+        </div>
+    </div>
+</body>
+
+</html>
