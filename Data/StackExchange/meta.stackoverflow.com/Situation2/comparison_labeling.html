@@ -11,6 +11,13 @@
             padding: 20px;
             background-color: #f4f4f4;
         }
+        .question-container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
         .container {
             display: flex;
             gap: 20px;
@@ -74,9 +81,9 @@
                 const answerTime = data[page].answer_time || 'N/A';
                 const answer = data[page].answer || 'N/A';
 
-                document.getElementById(columnPrefix + "questioner_name").innerText = questionerName;
-                document.getElementById(columnPrefix + "question_time").innerText = questionTime;
-                document.getElementById(columnPrefix + "question").innerText = question;
+                document.getElementById("questioner_name").innerText = questionerName;
+                document.getElementById("question_time").innerText = questionTime;
+                document.getElementById("question").innerText = question;
                 document.getElementById(columnPrefix + "answerer_name").innerText = answererName;
                 document.getElementById(columnPrefix + "answer_time").innerText = answerTime;
                 document.getElementById(columnPrefix + "answer").innerText = answer;
@@ -165,37 +172,23 @@
             }
         }
 
-        function handleFile1Select(event) {
+        function handleFileSelect(event) {
             const file = event.target.files[0];
             if (file) {
                 Papa.parse(file, {
                     header: true,
                     complete: function (results) {
                         console.log(results.data); // For debugging
-                        data1 = results.data;
+                        data = results.data;
+
+                        const midpoint = Math.floor(data.length / 2);
+                        data1 = data.slice(0, midpoint);
+                        data2 = data.slice(midpoint);
+                        console.log(data1);
+                        console.log(data2);
                         if (data1.length > 0) {
                             currentPage = 0;
                             renderPage(currentPage, data1, 'col1-');
-                        } else {
-                            alert("CSV文件中没有有效数据。");
-                        }
-                    },
-                    error: function (err) {
-                        console.error("解析错误:", err);
-                    }
-                });
-            }
-        }
-        function handleFile2Select(event) {
-            const file = event.target.files[0];
-            if (file) {
-                Papa.parse(file, {
-                    header: true,
-                    complete: function (results) {
-                        console.log(results.data); // For debugging
-                        data2 = results.data;
-                        if (data2.length > 0) {
-                            currentPage = 0;
                             renderPage(currentPage, data2, 'col2-');
                         } else {
                             alert("CSV文件中没有有效数据。");
@@ -210,13 +203,17 @@
     </script>
 </head>
 <body>
+    <div class="question-container">
+        <h2>File</h2>
+        <input type="file" id="fileInput" accept=".csv" onchange="handleFileSelect(event, 'data')">
+
+        <p><em>Questioner Name:</em> <u><span id="questioner_name"></span></u></p>
+        <p><em>Creation Date:</em> <span id="question_time"></span></p>
+        <p><em>Question:</em> <span id="question"></span></p>
+    </div>
+
     <div class="container">
         <div class="column">
-            <h2>File 1</h2>
-            <input type="file" id="fileInput1" accept=".csv" onchange="handleFile1Select(event, 'data1')">
-            <p><em>Questioner Name:</em> <u><span id="col1-questioner_name"></span></u></p>
-            <p><em>Creation Date:</em> <span id="col1-question_time"></span></p>
-            <p><em>Question:</em> <span id="col1-question"></span></p>
             <p><em>Answerer Name:</em> <u><span id="col1-answerer_name"></span></u></p>
             <p><em>Creation Date:</em> <span id="col1-answer_time"></span></p>
             <p><em>Answer:</em> <span id="col1-answer"></span></p>
@@ -225,11 +222,6 @@
         </div>
 
         <div class="column">
-            <h2>File 2</h2>
-            <input type="file" id="fileInput2" accept=".csv" onchange="handleFile2Select(event, 'data2')">
-            <p><em>Questioner Name:</em> <u><span id="col2-questioner_name"></span></u></p>
-            <p><em>Creation Date:</em> <span id="col2-question_time"></span></p>
-            <p><em>Question:</em> <span id="col2-question"></span></p>
             <p><em>Answerer Name:</em> <u><span id="col2-answerer_name"></span></u></p>
             <p><em>Creation Date:</em> <span id="col2-answer_time"></span></p>
             <p><em>Answer:</em> <span id="col2-answer"></span></p>
