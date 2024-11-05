@@ -68,7 +68,7 @@
         let selections = [];
         let resultString = '';
 
-        function renderPage(page, data, columnPrefix) {
+        function renderPage(page, data, columnPrefix, leftTitle, rightTitle) {
             if (data.length > 0) {
                 console.log(`Rendering page ${page} for ${columnPrefix}`);
 
@@ -123,9 +123,18 @@
                 // 记录用户选择
                 document.getElementById('optionSelect').value = '0';
                 document.getElementById('optionSelect').onchange = function () {
+                    let selected_option;
+                    if (this.value === '1') {
+                        selected_option = leftTitle;
+                    } else if (this.value === '2') {
+                        selected_option = 'Same';
+                    } else if (this.value === '3') {
+                        selected_option = rightTitle;
+                    }
+
                     selections[page] = {
                         page_index: page,
-                        selected_option: this.value
+                        selected_option: selected_option,
                     };
                     console.log(selections); // 调试输出
 
@@ -138,8 +147,13 @@
 
         function renderBothPages() {
             if (data1.length > 0) {
-                renderPage(currentPage, data1, 'col1-');
-                renderPage(currentPage, data2, 'col2-');
+                if (Math.random() < 0.5) {
+                    renderPage(currentPage, data1, 'col1-', 'Our', 'Other');
+                    renderPage(currentPage, data2, 'col2-', 'Our', 'Other');
+                } else {
+                    renderPage(currentPage, data2, 'col1-', 'Other', 'Our');
+                    renderPage(currentPage, data1, 'col2-', 'Other', 'Our');
+                }
             } else {
                 console.warn("One or both data files are empty. Please check the file contents.");
             }
@@ -188,8 +202,14 @@
                         console.log(data2);
                         if (data1.length > 0) {
                             currentPage = 0;
-                            renderPage(currentPage, data1, 'col1-');
-                            renderPage(currentPage, data2, 'col2-');
+
+                            if (Math.random() < 0.5) {
+                                renderPage(currentPage, data1, 'col1-', 'Our', 'Other');
+                                renderPage(currentPage, data2, 'col2-', 'Our', 'Other');
+                            } else {
+                                renderPage(currentPage, data2, 'col1-', 'Other', 'Our');
+                                renderPage(currentPage, data1, 'col2-', 'Other', 'Our');
+                            }
                         } else {
                             alert("CSV文件中没有有效数据。");
                         }
