@@ -20,7 +20,7 @@ from Model.Losses.RankHingeLoss import RankHingeLoss
 from Model.DataLoader.DataLoader import DataLoader
 from Model.DataLoader.DataProcessor import OurProcessor
 from Model.DataLoader.Dataset import OurDataset
-from Model.LSTM.SQACILSTM import SQACILSTMModel
+from Model.LSTM.SQACITM import SQACITMModel
 from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 
 from warnings import simplefilter
@@ -70,7 +70,7 @@ class OurModel(nn.Module):
 
         self.relevancy_layer = nn.Linear(hidden_size * 2, 20)
 
-        self.sqacilstm = SQACILSTMModel(
+        self.sqacitm = SQACITMModel(
             question_size=hidden_size,
             answer_size=hidden_size,
             input_size=hidden_size,
@@ -116,7 +116,7 @@ class OurModel(nn.Module):
         argument_quality = torch.cat([relevancy, feature], dim=-1)                           # torch.Size([batch_size, 64])
 
         # SC
-        source_credibility = self.sqacilstm(bert_output_left.unsqueeze(1), bert_output_right.unsqueeze(1), bert_output_comment, ping)[:, -1, :]     # torch.Size([batch_size, hidden_size])
+        source_credibility = self.sqacitm(bert_output_left.unsqueeze(1), bert_output_right.unsqueeze(1), bert_output_comment, ping)[:, -1, :]     # torch.Size([batch_size, hidden_size])
         source_credibility = self.credibility_layer(source_credibility)                                             # torch.Size([batch_size, 64])
 
         usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
@@ -328,8 +328,8 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Our Model')
-    parser.add_argument('--task_name', nargs='?', default='OM',
+    parser = argparse.ArgumentParser(description='Our Model without LSTM')
+    parser.add_argument('--task_name', nargs='?', default='OM_wo_LSTM',
                         help='Task name')
 
     parser.add_argument('--alpha', type=float, default=0.8,
@@ -344,7 +344,7 @@ def parse_args():
                         help='Data directory')
     parser.add_argument('--data_name', nargs='?', default='meta.stackoverflow.com',
                         help='Data name')
-    parser.add_argument('--device', nargs='?', default='cuda:1',
+    parser.add_argument('--device', nargs='?', default='cuda:3',
                         help='Device')
     parser.add_argument('--dropout_prob', type=float, default=0.1,
                         help='Dropout probability')
@@ -352,7 +352,7 @@ def parse_args():
                         help='Number of epochs')
     parser.add_argument('--finetuned_model_path', nargs='?', default='./FinetunedModel/Our_model-20241004_191930/best_model.pth',
                         help='Finetuned model path')
-    parser.add_argument('--fold', type=int, default=1,
+    parser.add_argument('--fold', type=int, default=8,
                         help='Fold')
     parser.add_argument('--freeze', type=bool, default=False,
                         help='Freeze')
