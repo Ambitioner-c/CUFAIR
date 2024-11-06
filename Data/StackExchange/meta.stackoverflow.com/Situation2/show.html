@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comparison Labeling</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .question-container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            justify-content: space-between;
+        }
+        .column {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 48%;
+        }
+        .navigation {
+            text-align: center;
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .comment-section {
+            display: flex;
+            flex-direction: column;
+        }
+        .highlight {
+            font-weight: bold;
+        }
+        .select-option {
+            margin: 20px 0;
+            text-align: center;
+        }
+        input[type="file"] {
+            margin-bottom: 10px;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script>
+        let currentPage = 0;
+        let data1 = [];
+        let data2 = [];
+        let selections = [];
+        let resultString = '';
+
+        function renderPage(page, data, columnPrefix, leftTitle, rightTitle) {
+            if (data.length > 0) {
+                console.log(`Rendering page ${page} for ${columnPrefix}`);
+
+                const questionID = data[page].question_id || 'N/A';
+                const questionerName = data[page].questioner_name || 'N/A';
+                const questionTime = data[page].question_time || 'N/A';
+                const question = data[page].question || 'N/A';
+                const answerID = data[page].answer_id || 'N/A';
+                const answererName = data[page].answerer_name || 'N/A';
+                const answerTime = data[page].answer_time || 'N/A';
+                const answer = data[page].answer || 'N/A';
+
+                document.getElementById("questioner_name").innerText = questionerName;
+                document.getElementById("question_time").innerText = questionTime;
+                document.getElementById("question").innerText = question;
+                document.getElementById(columnPrefix + "answerer_name").innerText = answererName;
+                document.getElementById(columnPrefix + "answer_time").innerText = answerTime;
+                document.getElementById(columnPrefix + "answer").innerText = answer;
+
+                const commentSection = document.getElementById(columnPrefix + "comment-section");
+                commentSection.innerHTML = "";
+
+                let commenterNames = data[page].commenter_name || '';
+                let commentTimes = data[page].comment_time || '';
+                let comments = data[page].comment || '';
+                commenterNames = commenterNames.split('--Fulai Cui--').map(name => name.trim());
+                commentTimes = commentTimes.split('--Fulai Cui--').map(time => time.trim());
+                comments = comments.split('--Fulai Cui--').map(comment => comment.trim());
+
+                const commentsData = commenterNames.map((name, index) => ({
+                    name: name,
+                    time: commentTimes[index],
+                    comment: comments[index]
+                }));
+
+                let table = '<table border="1"><tr><th>Time</th><th>Commenter</th><th>Comment</th></tr>';
+                commentsData.forEach(item => {
+                    let commentText = item.comment.split(' ').map(word => {
+                        if (word.startsWith('@')) {
+                            return `<span class="highlight">${word}</span>`;
+                        }
+                        return word;
+                    }).join(' ');
+
+                    table += `<tr><td style="width: 15%;text-align:center">${item.time}</td><td style="width: 20%;text-align:center">${item.name}</td><td style="width: 65%;">${commentText}</td></tr>`;
+                });
+                table += '</table>';
+
+                commentSection.innerHTML = table;
+
+
+                // 记录用户选择
+                document.getElementById('optionSelect').value = '0';
+                document.getElementById('optionSelect').onchange = function () {
+                    let selected_option;
+                    if (this.value === '1') {
+                        selected_option = leftTitle;
+                    } else if (this.value === '2') {
+                        selected_option = 'Same';
+                    } else if (this.value === '3') {
+                        selected_option = rightTitle;
+                    }
+
+                    selections[page] = {
+                        page_index: page,
+                        selected_option: selected_option,
+                    };
+                    console.log(selections); // 调试输出
+
+                    // 更新结果字符串
+                    resultString = selections.map(sel => `PageIndex:${sel.page_index},SelectedOption:${sel.selected_option}`).join('\n');
+                    console.log(resultString)
+                }
+            }
+        }
+
+        function goToPage() {
+            const pageInput = parseInt(document.getElementById("pageInput").value);
+            if (!isNaN(pageInput) && pageInput >= 0 && pageInput < data1.length) {
+                currentPage = pageInput;
+                if (Math.random() < 0.5) {
+                    renderPage(currentPage, data1, 'col1-', 'Our', 'Other');
+                    renderPage(currentPage, data2, 'col2-', 'Our', 'Other');
+                } else {
+                    renderPage(currentPage, data2, 'col1-', 'Other', 'Our');
+                    renderPage(currentPage, data1, 'col2-', 'Other', 'Our');
+                }
+            } else {
+                alert("请输入有效的页面编号。");
+            }
+        }
+
+        function renderBothPages() {
+            if (data1.length > 0) {
+                if (Math.random() < 0.5) {
+                    renderPage(currentPage, data1, 'col1-', 'Our', 'Other');
+                    renderPage(currentPage, data2, 'col2-', 'Our', 'Other');
+                } else {
+                    renderPage(currentPage, data2, 'col1-', 'Other', 'Our');
+                    renderPage(currentPage, data1, 'col2-', 'Other', 'Our');
+                }
+            } else {
+                console.warn("One or both data files are empty. Please check the file contents.");
+            }
+        }
+
+        function nextPage() {
+            if (document.getElementById('optionSelect').value === '0') {
+                alert("请先选择一个选项。");
+                return;
+            }
+            if (currentPage < data1.length - 1) {
+                currentPage++;
+                renderBothPages();
+            } else {
+                alert("已经是最后一页。");
+                const blob = new Blob([resultString], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const downloadLink = document.createElement('a');
+                downloadLink.href = url;
+                downloadLink.download = 'selections.txt';
+                downloadLink.click();
+                URL.revokeObjectURL(url);
+            }
+        }
+
+        function previousPage() {
+            if (currentPage > 0) {
+                currentPage--;
+                renderBothPages();
+            }
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                Papa.parse(file, {
+                    header: true,
+                    complete: function (results) {
+                        console.log(results.data); // For debugging
+                        data = results.data;
+
+                        const midpoint = Math.floor(data.length / 2);
+                        data1 = data.slice(0, midpoint);
+                        data2 = data.slice(midpoint);
+                        console.log(data1);
+                        console.log(data2);
+                        if (data1.length > 0) {
+                            currentPage = 0;
+
+                            if (Math.random() < 0.5) {
+                                renderPage(currentPage, data1, 'col1-', 'Our', 'Other');
+                                renderPage(currentPage, data2, 'col2-', 'Our', 'Other');
+                            } else {
+                                renderPage(currentPage, data2, 'col1-', 'Other', 'Our');
+                                renderPage(currentPage, data1, 'col2-', 'Other', 'Our');
+                            }
+                        } else {
+                            alert("CSV文件中没有有效数据。");
+                        }
+                    },
+                    error: function (err) {
+                        console.error("解析错误:", err);
+                    }
+                });
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="question-container">
+        <h2>File</h2>
+        <input type="file" id="fileInput" accept=".csv" onchange="handleFileSelect(event, 'data')">
+        <div>
+            <p><strong>1. Read the question, two different answers, and the comments on the answers.</strong></p>
+        </div>
+
+        <p><em>Questioner Name:</em> <u><span id="questioner_name"></span></u></p>
+        <p><em>Creation Date:</em> <span id="question_time"></span></p>
+        <p><em>Question:</em> <span id="question"></span></p>
+    </div>
+
+    <div class="container">
+        <div class="column">
+            <p><em>Answerer Name:</em> <u><span id="col1-answerer_name"></span></u></p>
+            <p><em>Creation Date:</em> <span id="col1-answer_time"></span></p>
+            <p><em>Answer:</em> <span id="col1-answer"></span></p>
+            <p><em>Comments:</em></p>
+            <div class="comment-section" id="col1-comment-section"></div>
+        </div>
+
+        <div class="column">
+            <p><em>Answerer Name:</em> <u><span id="col2-answerer_name"></span></u></p>
+            <p><em>Creation Date:</em> <span id="col2-answer_time"></span></p>
+            <p><em>Answer:</em> <span id="col2-answer"></span></p>
+            <p><em>Comments:</em></p>
+            <div class="comment-section" id="col2-comment-section"></div>
+        </div>
+    </div>
+
+    <div>
+        <p><strong>2. Choose one of the two answers that you consider relatively better.</strong></p>
+    </div>
+    <div class="select-option">
+        <label for="optionSelect">Choose an option:</label>
+        <select id="optionSelect">
+            <option value="0">待选择</option>
+            <option value="1">Left is better</option>
+            <option value="2">Same</option>
+            <option value="3">Right is better</option>
+        </select>
+    </div>
+    <div class="navigation">
+        <input type="number" id="pageInput" placeholder="输入页面编号" min="0" max="200">
+        <button onclick="goToPage()">跳转到指定页</button>
+    </div>
+
+    <div class="navigation">
+        <button onclick="previousPage()">Previous</button>
+        <button onclick="nextPage()">Next</button>
+    </div>
+</body>
+</html>
