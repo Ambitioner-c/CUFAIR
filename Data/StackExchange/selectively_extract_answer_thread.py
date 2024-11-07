@@ -57,9 +57,14 @@ class Extract:
             a_name = answer.attrib['OWNER_DISPLAY_NAME']
             a_time = answer.attrib['CREATION_DATE'].replace('T', ' ')
             a_body = answer.find('ABody').text
-            c_name = [comment.attrib['DISPLAY_NAME'] for comment in answer.find('AComment').findall('Comment')]
-            c_time = [comment.attrib['CREATION_DATE'].replace('T', ' ') for comment in answer.find('AComment').findall('Comment')]
-            c_body = [comment.find('CBody').text for comment in answer.find('AComment').findall('Comment')]
+            try:
+                c_name = [comment.attrib['DISPLAY_NAME'] for comment in answer.find('AComment').findall('Comment')]
+                c_time = [comment.attrib['CREATION_DATE'].replace('T', ' ') for comment in answer.find('AComment').findall('Comment')]
+                c_body = [comment.find('CBody').text for comment in answer.find('AComment').findall('Comment')]
+            except AttributeError:
+                c_name = ['']
+                c_time = ['']
+                c_body = ['']
             text_left_ids.append(q_id)
             text_left_names.append(q_name)
             text_left_times.append(q_time)
