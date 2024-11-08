@@ -380,6 +380,8 @@ def parse_args():
                         help='Limit')
     parser.add_argument('--lr', type=float, default=2e-5,
                         help='Learning rate')
+    parser.add_argument('--proportion', type=float, default=1.0,
+                        help='Proportion')
     parser.add_argument('--margin', type=float, default=5,
                         help='Margin')
     parser.add_argument('--max_length', type=int, default=256,
@@ -436,6 +438,7 @@ def main():
             max_seq_length=args.max_seq_length,
             mode='accept',
             fold=args.fold,
+            proportion=args.proportion,
         ).get_train_examples(args.data_dir)
         train_dataset = OurDataset(
             argument_quality=argument_quality,

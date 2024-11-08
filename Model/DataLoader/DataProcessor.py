@@ -53,6 +53,7 @@ Parsing /home/cuifulai/Projects/CQA/Data/StackExchange/meta.stackoverflow.com/Te
 test_10_fold (227, 10)
 """
 import os
+import random
 import typing
 from typing import Optional
 from abc import ABC
@@ -89,6 +90,7 @@ class OurProcessor(DataProcessor, ABC):
             fold: int = 1,
             min_seq_length: int = 1,
             situation: int = 1,
+            proportion: float = 1.0,
     ):
         super(OurProcessor).__init__()
 
@@ -108,6 +110,7 @@ class OurProcessor(DataProcessor, ABC):
         self.fold = fold
         self.min_seq_length = min_seq_length
         self.situation = situation
+        self.proportion = proportion
 
     def get_all_examples(self, data_dir: str) -> DataPack:
         if self.situation == 1:
@@ -179,6 +182,10 @@ class OurProcessor(DataProcessor, ABC):
                 a_score = answer.attrib['SCORE']
                 try:
                     a_support = answer.attrib['COMMUNITY_SUPPORT']
+                    if random.random() < self.proportion:
+                        a_support = a_support
+                    else:
+                        a_support = '-1'
                 except KeyError:
                     a_support = '-1'
                 a_support = float(a_support)
