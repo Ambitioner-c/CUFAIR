@@ -292,12 +292,23 @@ def eval_ranking_metrics_on_data_frame(
 
 
 def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
+    support_loss_function = nn.MSELoss()
+
     predictions = []
+    support_losses = []
     for test_sample in test_dataloader:
-        test_inputs, _, _ = test_sample
+        test_inputs, _, supports = test_sample
+        mask = supports >= 0
+
         with torch.no_grad():
-            test_outputs = model(test_inputs)[0].detach().cpu()
-            predictions.append(test_outputs)
+            test_outputs, test_output_supports = model(test_inputs)
+
+            test_support_loss = support_loss_function(input=test_output_supports[mask], target=supports[mask].to(model.device))
+
+            if not torch.isnan(test_support_loss):
+                support_losses.append(test_support_loss.item())
+
+            predictions.append(test_outputs.detach().cpu())
     y_pred = torch.cat(predictions, dim=0).numpy()
     y_true = test_dataloader.label
     id_left = test_dataloader.id_left
@@ -305,6 +316,7 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
         eval_ranking_metrics_on_data_frame(id_left, y_true, y_pred.squeeze(axis=-1)))
     best_test_result = (
         f'{task_name}\t'
+        f'{coloring("support_loss", "purple_bg")}:{np.mean(support_losses)}\t'
         f'Ranking:\t'
         f'{coloring("p@1", "red_bg")}:{round(p_1, 4)}\t'
         f'{coloring("p@3", "red_bg")}:{round(p_3, 4)}\t'
