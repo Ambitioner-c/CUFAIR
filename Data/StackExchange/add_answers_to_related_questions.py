@@ -55,7 +55,7 @@ class Restructure:
 
             # Candidate Threads
             c_q_ids = self.rel_dict[q_id]
-            for c_q_id in c_q_ids:
+            for c_q_id in c_q_ids[:5]:
                 c_q_elem = self.search(c_q_id)
 
                 if c_q_elem is not None:
