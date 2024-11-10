@@ -28,10 +28,12 @@ class Restructure:
             data_name: str = 'meta.stackoverflow.com',
             rel_dict: dict = None,
             save: str = None,
+            num_answers: int = 2,
     ):
         self.data_name = data_name
         self.rel_dict = rel_dict
         self.save = save
+        self.num_answers = num_answers
 
         with open(f'./{self.data_name}/{self.data_name}.xml', 'r', encoding='utf-8') as f:
             self.root = ElementTree.parse(f).getroot()
@@ -46,7 +48,7 @@ class Restructure:
 
             # Answers
             answers = elem.findall('Answer')
-            assert len(answers) == 2
+            assert len(answers) == self.num_answers
             length = len(answers)
 
             # Candidate Threads
@@ -111,16 +113,18 @@ class Restructure:
 
 def main():
     data_name = 'meta.stackoverflow.com'
+    num_answers = 2
 
-    related_questions_filepath = f'./{data_name}/Situation2/related_questions.txt'
+    related_questions_filepath = f'./{data_name}/Situation2/related_questions_{str(num_answers)}.txt'
     rel_dict = read_related_questions(related_questions_filepath)
 
-    save = f'./{data_name}/Situation2/{data_name}.xml'
+    save = f'./{data_name}/Situation2/{data_name}_{str(num_answers)}.xml'
 
     restructure = Restructure(
         data_name=data_name,
         rel_dict=rel_dict,
-        save=save
+        save=save,
+        num_answers=num_answers
     )
     restructure.run()
 
