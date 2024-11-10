@@ -136,7 +136,10 @@ def get_top_1(
         if idx == 0:
             start_points[f'L-{idx}'] = 0
         else:
-            start_points[f'L-{idx}'] = start_points[f'L-{idx-1}'] + counts[f'L-{idx-1}']
+            try:
+                start_points[f'L-{idx}'] = start_points[f'L-{idx-1}'] + counts[f'L-{idx-1}']
+            except KeyError:
+                break
 
     result['idxmax'] = result.apply(lambda x: x['idxmax'] - start_points[x['id']], axis=1)
 
