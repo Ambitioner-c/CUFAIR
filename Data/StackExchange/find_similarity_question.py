@@ -27,11 +27,13 @@ class Split:
             num_answers: int = 2,
             num_comments: int = 5,
             limit: int = 0,
+            filtered: bool = True,
     ):
         self.data_name = data_name
         self.num_answers = num_answers
         self.num_comments = num_comments
         self.limit = limit
+        self.filtered = filtered
 
     def run(self):
         original_elems = []
@@ -42,13 +44,14 @@ class Split:
             answers = elem.findall('Answer')
 
             switch = True
-            for answer in answers:
-                if answer.attrib['ACCEPTED_ANSWER'] == 'Yes':
-                    switch = False
-                    break
-                if int(answer.attrib['COMMENT_COUNT']) < self.num_comments:
-                    switch = False
-                    break
+            if self.filtered:
+                for answer in answers:
+                    if answer.attrib['ACCEPTED_ANSWER'] == 'Yes':
+                        switch = False
+                        break
+                    if int(answer.attrib['COMMENT_COUNT']) < self.num_comments:
+                        switch = False
+                        break
             if len(answers) == self.num_answers and switch:
                 original_elems.append(elem)
             else:
@@ -187,11 +190,14 @@ class BERTModel(nn.Module):
         original_text_left_features = original_text_left_features.to(self.device)
         candidate_text_left_features = candidate_text_left_features.to(self.device)
 
-        original_outputs = self.bert(original_text_left_features)['pooler_output']
+        length = original_text_left_features.shape[0]
+        length = 100 if length > 100 else length
+
+        original_outputs = self.bert(original_text_left_features[:length])['pooler_output']
 
         outputs = []
-        batch_size = 8000
-        for i in trange(100):
+        batch_size = 5000
+        for i in trange(length, desc="Calculating cosine similarity"):
             temp_outputs = []
             for j in range(0, candidate_text_left_features.shape[0], batch_size):
                 candidate_outputs = self.bert(candidate_text_left_features[j:j + batch_size])['pooler_output']
@@ -208,7 +214,7 @@ def main():
     num_comments = 5
     limit = 0
 
-    original_elems, candidate_elems = Split(data_name, num_answers, num_comments, limit).run()
+    original_elems, candidate_elems = Split(data_name, num_answers, num_comments, limit, filtered=True).run()
 
     processor = OurProcessor(original_elems, candidate_elems)
     original_df = processor.get_original_examples()
@@ -229,7 +235,7 @@ def main():
 
     outputs = model((dataset.original_left_ids, dataset.original_text_left_features), (dataset.candidate_left_ids, dataset.candidate_text_left_features))
 
-    with open(f'./{data_name}/Situation2/related_questions.txt', 'w', encoding='utf-8') as f:
+    with open(f'./{data_name}/Situation2/related_questions_{str(num_answers)}.txt', 'w', encoding='utf-8') as f:
         for i, output in enumerate(outputs):
             for j in range(output.indices.shape[0]):
                 f.write(f"{dataset.original_left_ids[i]}\t"
