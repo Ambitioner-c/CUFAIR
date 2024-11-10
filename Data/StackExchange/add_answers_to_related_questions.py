@@ -29,11 +29,13 @@ class Restructure:
             rel_dict: dict = None,
             save: str = None,
             num_answers: int = 2,
+            threshold: int = 10,
     ):
         self.data_name = data_name
         self.rel_dict = rel_dict
         self.save = save
         self.num_answers = num_answers
+        self.threshold = threshold
 
         with open(f'./{self.data_name}/{self.data_name}.xml', 'r', encoding='utf-8') as f:
             self.root = ElementTree.parse(f).getroot()
@@ -68,7 +70,7 @@ class Restructure:
                         c_answer.append(c_question)
                         elem.append(c_answer)
                     length += len(c_answers)
-                    if length >= 5:
+                    if length >= self.threshold:
                         break
             self.write_file(elem)
 
@@ -115,6 +117,8 @@ def main():
     data_name = 'meta.stackoverflow.com'
     num_answers = 2
 
+    threshold = 10
+
     related_questions_filepath = f'./{data_name}/Situation2/related_questions_{str(num_answers)}.txt'
     rel_dict = read_related_questions(related_questions_filepath)
 
@@ -124,7 +128,8 @@ def main():
         data_name=data_name,
         rel_dict=rel_dict,
         save=save,
-        num_answers=num_answers
+        num_answers=num_answers,
+        threshold=threshold
     )
     restructure.run()
 
