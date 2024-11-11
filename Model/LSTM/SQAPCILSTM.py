@@ -9,30 +9,32 @@ import math
 
 from transformers import set_seed
 
-from Model.Unit.modeling_bert import BertSelfAttention
 
-
-class SQACILSTMCell(nn.Module):
+class SQAPCILSTMCell(nn.Module):
     def __init__(
             self,
             question_size: int,
             answer_size: int,
-            input_size: int,
+            left_size:int,
+            right_size: int,
             hidden_size: int,
             is_peephole: bool = False,
     ):
-        super(SQACILSTMCell, self).__init__()
+        super(SQAPCILSTMCell, self).__init__()
         self.question_size = question_size
         self.answer_size = answer_size
-        self.input_size = input_size
+        self.left_size = left_size
+        self.right_size = right_size
         self.hidden_size = hidden_size
         self.weight_qh = nn.Parameter(Tensor(question_size, hidden_size * 4))
         self.weight_ah = nn.Parameter(Tensor(answer_size, hidden_size * 4))
-        self.weight_ih = nn.Parameter(Tensor(input_size, hidden_size * 4))
+        self.weight_lh = nn.Parameter(Tensor(left_size, hidden_size * 4))
+        self.weight_rh = nn.Parameter(Tensor(right_size, hidden_size * 4))
         self.weight_hh = nn.Parameter(Tensor(hidden_size, hidden_size * 4))
         self.bias_qh = nn.Parameter(Tensor(hidden_size * 4))
         self.bias_ah = nn.Parameter(Tensor(hidden_size * 4))
-        self.bias_ih = nn.Parameter(Tensor(hidden_size * 4))
+        self.bias_lh = nn.Parameter(Tensor(hidden_size * 4))
+        self.bias_rh = nn.Parameter(Tensor(hidden_size * 4))
         self.bias_hh = nn.Parameter(Tensor(hidden_size * 4))
         self.init_parameters()
 
@@ -47,17 +49,22 @@ class SQACILSTMCell(nn.Module):
             self,
             question: Tensor,
             answer: Tensor,
-            x: Tensor,
+            left: Tensor,
+            right: Tensor,
             init_states: Tuple[Tensor, Tensor]
     ) -> Tuple[Tensor, Tensor]:
         h_t_minus_1, c_t_minus_1 = init_states
 
         q_temp = torch.mm(question, self.weight_qh) + self.bias_qh
         a_temp = torch.mm(answer, self.weight_ah) + self.bias_ah
+        l_temp = torch.mm(left, self.weight_lh) + self.bias_lh
+        r_temp = torch.mm(right, self.weight_rh) + self.bias_rh
+
         if self.is_peephole:
             q_temp[:, self.hidden_size * 2: self.hidden_size * 3] = 0
             a_temp[:, self.hidden_size * 2: self.hidden_size * 3] = 0
-        gates = q_temp + a_temp + torch.mm(x, self.weight_ih) + self.bias_ih + torch.mm(h_t_minus_1, self.weight_hh) + self.bias_hh
+            l_temp[:, self.hidden_size * 2: self.hidden_size * 3] = 0
+        gates = q_temp + a_temp + l_temp + r_temp + torch.mm(h_t_minus_1, self.weight_hh) + self.bias_hh
         input_gate, forget_gate, cell, output_gate = gates.chunk(4, dim=1)
         c = torch.sigmoid(forget_gate) * c_t_minus_1 + torch.sigmoid(input_gate) * torch.tanh(cell)
         h = torch.sigmoid(output_gate) * torch.tanh(c)
@@ -65,7 +72,7 @@ class SQACILSTMCell(nn.Module):
         return h, c
 
 
-class SQACILSTM(nn.Module):
+class SQAPCILSTM(nn.Module):
     def __init__(
             self,
             question_size: int,
@@ -78,23 +85,17 @@ class SQACILSTM(nn.Module):
             is_peephole: bool = False,
             ci_mode: str = 'all',
     ):
-        super(SQACILSTM, self).__init__()
+        super(SQAPCILSTM, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.batch_first = batch_first
-        layers = [SQACILSTMCell(question_size, answer_size, input_size, hidden_size, is_peephole)]
+        layers = [SQAPCILSTMCell(question_size, answer_size, input_size, input_size, hidden_size, is_peephole)]
         for _ in range(self.num_layers - 1):
-            layers += [SQACILSTMCell(question_size, answer_size, hidden_size, hidden_size, is_peephole)]
+            layers += [SQAPCILSTMCell(question_size, answer_size, hidden_size, hidden_size, hidden_size, is_peephole)]
         self.net = nn.Sequential(*layers)
 
         self.h = None
         self.c = None
-
-        self.self_attention = BertSelfAttention(hidden_size, num_attention_heads)
-        if ci_mode == 'all':
-            self.self_attention_layer = nn.Linear(hidden_size * 2, hidden_size)
-
-        self.ci_mode = ci_mode
 
     def forward(
             self,
@@ -120,9 +121,9 @@ class SQACILSTM(nn.Module):
         for i, cell in enumerate(self.net):  # Layers
             h_t, c_t = self.h[0, i].clone(), self.c[0, i].clone()
             for t in range(x.size(0)):  # Sequences
-                inputs = self.refactoring(inputs, ping, t).clone()
+                l_inputs = self.refactoring(inputs, ping, t).clone()
 
-                h_t, c_t = cell(question[0], answer[0], inputs[t], (h_t, c_t))
+                h_t, c_t = cell(question[0], answer[0], l_inputs[t], inputs[t], (h_t, c_t))
                 self.h[t, i], self.c[t, i] = h_t, c_t
             inputs = self.h[:, i].clone()
 
@@ -131,37 +132,20 @@ class SQACILSTM(nn.Module):
 
         return self.h[:, -1], (self.h[-1], self.c[-1])
 
-    def refactoring(self, inputs: Tensor, pings: Tensor, t: int) -> Tensor:
+    @staticmethod
+    def refactoring(inputs: Tensor, pings: Tensor, t: int) -> Tensor:
         # Input size: (seq_length, batch_size, input_size)
         # Ping size: (batch_size, seq_length)
-        new_inputs = inputs.clone()
+        l_inputs = torch.zeros_like(inputs)
         if t:
             for batch, ping in enumerate(pings[:, t]):
                 ping = ping.item()
                 if ping:
-                    # left = self.h[ping - 1, i, batch].clone()
-                    left = new_inputs[ping - 1, batch].clone()
-                    right = new_inputs[t, batch].clone()
-
-                    if self.ci_mode == 'left':
-                        new_inputs[t, batch] = self.self_attention(
-                            torch.cat((left.unsqueeze(0), right.unsqueeze(0)), dim=0).unsqueeze(0)
-                        )[0].squeeze(0)[0].clone()
-                    elif self.ci_mode == 'right':
-                        new_inputs[t, batch] = self.self_attention(
-                            torch.cat((left.unsqueeze(0), right.unsqueeze(0)), dim=0).unsqueeze(0)
-                        )[0].squeeze(0)[1].clone()
-                    elif self.ci_mode == 'all':
-                        new_inputs[t, batch] = self.self_attention_layer(
-                            self.self_attention(
-                                torch.cat((left.unsqueeze(0), right.unsqueeze(0)), dim=0).unsqueeze(0)
-                            )[0].squeeze(0).view(self.hidden_size * 2)
-                        ).clone()
-
-        return new_inputs
+                    l_inputs[t, batch] = inputs[ping - 1, batch].clone()
+        return l_inputs
 
 
-class SQACILSTMModel(nn.Module):
+class SQAPCILSTMModel(nn.Module):
     def __init__(
             self,
             question_size: int,
@@ -174,14 +158,14 @@ class SQACILSTMModel(nn.Module):
             is_peephole: bool,
             ci_mode: str,
     ):
-        super(SQACILSTMModel, self).__init__()
+        super(SQAPCILSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.sqacilstm = SQACILSTM(question_size, answer_size, input_size, hidden_size, num_layers, num_attention_heads, batch_first=True, is_peephole=is_peephole, ci_mode=ci_mode)
+        self.sqapcilstm = SQAPCILSTM(question_size, answer_size, input_size, hidden_size, num_layers, num_attention_heads, batch_first=True, is_peephole=is_peephole, ci_mode=ci_mode)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, question: Tensor, answer: Tensor, x: Tensor, ping: Tensor) -> Tensor:
-        out, _ = self.sqacilstm(question, answer, x, ping, None)
+        out, _ = self.sqapcilstm(question, answer, x, ping, None)
         out = self.fc(out)
 
         return out
@@ -210,7 +194,7 @@ def main():
     num_attention_heads = 12
     is_peephole = False
     ci_mode = 'all'
-    model = SQACILSTMModel(input_size, input_size, input_size, hidden_size, num_layers, output_size, num_attention_heads, is_peephole, ci_mode)
+    model = SQAPCILSTMModel(input_size, input_size, input_size, hidden_size, num_layers, output_size, num_attention_heads, is_peephole, ci_mode)
     outputs = model(questions, answers, inputs, pings)
     print(outputs.size())
 
