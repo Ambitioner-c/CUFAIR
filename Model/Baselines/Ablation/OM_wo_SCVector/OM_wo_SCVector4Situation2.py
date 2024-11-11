@@ -77,7 +77,7 @@ class OurModel(nn.Module):
 
         self.community_support_layer = nn.Linear(64, 1)
 
-        self.usefulness_layer = nn.Linear(128, num_labels)
+        self.usefulness_layer = nn.Linear(65, num_labels)
 
         self.dropout = nn.Dropout(dropout_prob)
 
@@ -112,10 +112,12 @@ class OurModel(nn.Module):
         source_credibility = self.sqacilstm(bert_output_rel_left.unsqueeze(1), bert_output_right.unsqueeze(1), bert_output_comment, ping)[:, -1, :]     # torch.Size([batch_size, hidden_size])
         source_credibility = self.credibility_layer(source_credibility)                                             # torch.Size([batch_size, 64])
 
-        usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
+        community_support = self.community_support_layer(source_credibility)
+
+        usefulness = torch.cat([argument_quality, community_support], dim=-1)                               # torch.Size([batch_size, 65])
         outputs = self.usefulness_layer(usefulness)[:, 1].unsqueeze(1)                                              # torch.Size([batch_size, 1])
 
-        return outputs, self.community_support_layer(source_credibility)
+        return outputs, community_support
 
 
 def get_top_1(
@@ -163,8 +165,8 @@ def evaluate(args, task_name, model, test_dataloader, timestamp):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Our Model for Situation 2')
-    parser.add_argument('--task_name', nargs='?', default='OM4Situation2',
+    parser = argparse.ArgumentParser(description='Our Model w/o Source Credibility Vector for Situation 2')
+    parser.add_argument('--task_name', nargs='?', default='OM_wo_SCVector4Situation2',
                         help='Task name')
 
     parser.add_argument('--alpha', type=float, default=0.8,
