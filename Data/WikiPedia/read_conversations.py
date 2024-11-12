@@ -3,6 +3,7 @@
 # @Time: 2024/11/11 21:21
 import json
 import random
+from typing import Optional
 
 from tqdm import tqdm
 
@@ -15,16 +16,22 @@ class Conversation:
             conversation_path: str,
             samples: list,
             shuffle: bool,
+            save: Optional[str] = False,
     ):
         self.conversation_path = conversation_path
         self.samples = samples
         self.shuffle = shuffle
+        self.save = save
 
-    def main(self) -> dict:
+    def main(self):
         idx2label = self.read_conversation()
         if self.shuffle:
             idx2label = self.do_shuffle(idx2label)
-        return idx2label
+
+        if self.save:
+            self.write(idx2label)
+
+        self.statistic(idx2label)
 
     def read_conversation(self) -> dict:
         idx2label = dict()
@@ -72,6 +79,17 @@ class Conversation:
 
         return shuffled_idx2label
 
+    def write(self, idx2label: dict):
+        with open(self.save, 'w', encoding='utf-8') as f:
+            for idx, label in idx2label.items():
+                f.write(f'{idx},{label}\n')
+
+    @staticmethod
+    def statistic(idx2label: dict):
+        print(f'Number of samples: {len(idx2label)}')
+        print(f'Number of positive (keep) samples: {len([v for v in idx2label.values() if v == 1])}')
+        print(f'Number of negative (delete) samples: {len([v for v in idx2label.values() if v == 0])}')
+
 
 def main():
     set_seed(2024)
@@ -82,13 +100,15 @@ def main():
     samples = [5000, 5000]
 
     conversation_path = f'{data_dir}/Dumps/{data_name}/conversations.json'
+    sava_path = f'{data_dir}/Outs/{data_name}/idx2label.csv'
+
     conversation = Conversation(
         conversation_path,
         samples=samples,
         shuffle=True,
+        save=sava_path,
     )
-    idx2label = conversation.main()
-    print(idx2label)
+    conversation.main()
 
 
 if __name__ == '__main__':
