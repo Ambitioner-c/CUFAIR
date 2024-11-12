@@ -105,6 +105,8 @@ class Utterance:
                     elif conversation_id != temp_nomination['conversation_id']:
                         if len(temp_comments) >= self.threshold:
                             nominations.append(temp_nomination)
+
+                            temp_comments = self.sort_by_timestamp(temp_comments)
                             comments_list.append(temp_comments)
 
                         temp_nomination = utterance
@@ -117,6 +119,10 @@ class Utterance:
                         continue
         assert len(nominations) == len(comments_list)
         return nominations[: self.num], comments_list[: self.num]
+
+    @staticmethod
+    def sort_by_timestamp(utterances: list):
+        return sorted(utterances, key=lambda x: x['timestamp'])
 
     @staticmethod
     def parse_utterance(utterance: json):
