@@ -74,12 +74,16 @@ class Utterance:
                 o_body = ElementTree.SubElement(other, 'CBody')
                 o_body.text = comment['text'] or ''
 
-        xml_str = ElementTree.tostring(self.root, encoding='utf-8')
-        parsed_str = minidom.parseString(xml_str)
-        pretty_str = parsed_str.toprettyxml(indent="\t")
+        # xml_str = ElementTree.tostring(self.root, encoding='utf-8')
+        # parsed_str = minidom.parseString(xml_str)
+        # pretty_str = parsed_str.toprettyxml(indent="\t")
+        # if self.save:
+        #     with open(self.save, 'w', encoding='utf-8') as f:
+        #         f.write(pretty_str)
+
+        tree = ElementTree.ElementTree(self.root)
         if self.save:
-            with open(self.save, 'w', encoding='utf-8') as f:
-                f.write(pretty_str)
+            tree.write(self.save, encoding='utf-8', xml_declaration=True)
 
     def read_utterance(self, idx2label: json):
         nominations = []
