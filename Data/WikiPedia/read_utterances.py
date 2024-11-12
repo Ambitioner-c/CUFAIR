@@ -2,6 +2,7 @@
 # @Author: Fulai Cui (cuifulai@mail.hfut.edu.cn)
 # @Time: 2024/11/12 10:58
 import json
+import random
 from datetime import datetime
 from typing import Optional
 
@@ -27,24 +28,26 @@ class Utterance:
         self.shuffle = shuffle
         self.save = save
 
+        self.num = self.samples[0] + self.samples[1]
+
         self.root = ElementTree.Element('AfD')
 
     def main(self):
         idx2label = self.read_conversation()
-        nominations, comments_list, labels = self.read_utterance(idx2label)
-        self.generate_xml(nominations, comments_list, labels)
+        nominations, comments_list = self.read_utterance(idx2label)
+        self.generate_xml(nominations, comments_list, idx2label)
 
-    def generate_xml(self, nominations: list, comments_list: list[list], labels: list):
-        for i in trange(len(nominations)):
+    def generate_xml(self, nominations: list, comments_list: list[list], idx2label: json):
+        for i in trange(len(nominations), desc="Generating AfD.xml"):
             nomination = nominations[i]
             comments = comments_list[i]
-            label = labels[i]
+            label = idx2label[nomination['conversation_id']]
 
             thread = ElementTree.SubElement(self.root, 'Thread')
             thread.set('ID', nomination['conversation_id'])
-            if label == 0:
+            if label == '0':
                 thread.set('Label', 'delete')
-            elif label == 1:
+            elif label == '1':
                 thread.set('Label', 'keep')
 
             right = ElementTree.SubElement(thread, 'Nomination')
@@ -79,7 +82,6 @@ class Utterance:
     def read_utterance(self, idx2label: json):
         nominations = []
         comments_list = []
-        labels = []
         with open(self.utterance_path, 'r', encoding='utf-8') as f:
             temp_nomination = None
             temp_comments = []
@@ -99,16 +101,20 @@ class Utterance:
                     if temp_nomination is None:
                         temp_nomination = utterance
                     elif conversation_id != temp_nomination['conversation_id']:
-                        nominations.append(temp_nomination)
-                        comments_list.append(temp_comments)
-                        labels.append(idx2label[conversation_id])
+                        if temp_comments:
+                            nominations.append(temp_nomination)
+                            comments_list.append(temp_comments)
 
                         temp_nomination = utterance
                         temp_comments = []
                 else:
-                    temp_comments.append(utterance)
-        assert len(nominations) == len(comments_list) == len(labels)
-        return nominations, comments_list, labels
+                    try:
+                        if conversation_id == temp_nomination['conversation_id']:
+                            temp_comments.append(utterance)
+                    except TypeError:
+                        continue
+        assert len(nominations) == len(comments_list)
+        return nominations[: self.num], comments_list[: self.num]
 
     @staticmethod
     def parse_utterance(utterance: json):
@@ -121,14 +127,38 @@ class Utterance:
         timestamp = utterance['timestamp']
         return idx, conversation_id, meta_type, reply_to, speaker, text, timestamp
 
-    def read_conversation(self):
+    def read_conversation(self) -> dict:
         idx2label = dict()
         with open(self.conversation_path, 'r', encoding='utf-8') as f:
             for line in f:
                 idx, label = line.strip().split(',')
                 idx2label[idx] = label
 
+        if self.samples:
+            idx2label = self.do_sample(idx2label)
+
+        if self.shuffle:
+            idx2label = self.do_shuffle(idx2label)
+
         return idx2label
+
+    def do_sample(self, idx2label: dict) -> dict:
+        keys_0 = [k for k, v in idx2label.items() if v == '0']
+        keys_1 = [k for k, v in idx2label.items() if v == '1']
+
+        sample_0 = random.sample(keys_0, min(self.samples[0] + 1500, len(keys_0)))
+        sample_1 = random.sample(keys_1, min(self.samples[1] + 1500, len(keys_1)))
+
+        sampled_idx2label = {k: idx2label[k] for k in sample_0 + sample_1}
+        return sampled_idx2label
+
+    @staticmethod
+    def do_shuffle(idx2label: dict) -> dict:
+        idx = list(idx2label.items())
+        random.shuffle(idx)
+
+        shuffled_idx2label = dict(idx)
+        return shuffled_idx2label
 
 
 def main():
@@ -145,6 +175,8 @@ def main():
     utterance = Utterance(
         conversation_path,
         utterance_path,
+        samples=[5000, 5000],
+        shuffle=True,
         save=save_path,
     )
     utterance.main()
