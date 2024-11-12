@@ -14,8 +14,8 @@ class Conversation:
     def __init__(
             self,
             conversation_path: str,
-            samples: list,
-            shuffle: bool,
+            samples: Optional[list] = None,
+            shuffle: bool = False,
             save: Optional[str] = False,
     ):
         self.conversation_path = conversation_path
@@ -25,6 +25,10 @@ class Conversation:
 
     def main(self):
         idx2label = self.read_conversation()
+
+        if self.samples:
+            idx2label = self.do_sample(idx2label)
+
         if self.shuffle:
             idx2label = self.do_shuffle(idx2label)
 
@@ -60,7 +64,9 @@ class Conversation:
                     continue
 
                 idx2label[idx] = label
+        return idx2label
 
+    def do_sample(self, idx2label: dict) -> dict:
         keys_0 = [k for k, v in idx2label.items() if v == 0]
         keys_1 = [k for k, v in idx2label.items() if v == 1]
 
@@ -68,7 +74,6 @@ class Conversation:
         sample_1 = random.sample(keys_1, min(self.samples[1], len(keys_1)))
 
         sampled_idx2label = {k: idx2label[k] for k in sample_0 + sample_1}
-
         return sampled_idx2label
 
     @staticmethod
@@ -76,7 +81,6 @@ class Conversation:
         idx = list(idx2label.items())
         random.shuffle(idx)
         shuffled_idx2label = dict(idx)
-
         return shuffled_idx2label
 
     def write(self, idx2label: dict):
@@ -97,14 +101,12 @@ def main():
     data_dir = '/home/cuifulai/Projects/CQA/Data/WikiPedia'
     data_name = 'wiki-articles-for-deletion-corpus'
 
-    samples = [5000, 5000]
-
     conversation_path = f'{data_dir}/Dumps/{data_name}/conversations.json'
     sava_path = f'{data_dir}/Outs/{data_name}/idx2label.csv'
 
     conversation = Conversation(
         conversation_path,
-        samples=samples,
+        samples=None,
         shuffle=True,
         save=sava_path,
     )
