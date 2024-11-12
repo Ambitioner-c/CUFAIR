@@ -99,7 +99,7 @@ def main():
     set_seed(2024)
 
     data_dir = '/home/cuifulai/Projects/CQA/Data/WikiPedia'
-    data_name = 'wiki-articles-for-deletion-corpus'
+    data_name = 'AfD'
 
     conversation_path = f'{data_dir}/Dumps/{data_name}/conversations.json'
     sava_path = f'{data_dir}/Outs/{data_name}/idx2label.csv'

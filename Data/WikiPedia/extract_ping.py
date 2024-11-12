@@ -48,9 +48,9 @@ def main():
     set_seed(2024)
 
     data_dir = '/home/cuifulai/Projects/CQA/Data/WikiPedia'
-    data_name = 'wiki-articles-for-deletion-corpus'
+    data_name = 'AfD'
 
-    xml_path = f'{data_dir}/{data_name}/AfD.xml'
+    xml_path = f'{data_dir}/{data_name}/{data_name}.xml'
 
     ping = Ping(
         xml_path=xml_path,

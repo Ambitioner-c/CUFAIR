@@ -59,9 +59,9 @@ def main():
     seed = 2024
 
     data_dir = '/home/cuifulai/Projects/CQA/Data/WikiPedia'
-    data_name = 'wiki-articles-for-deletion-corpus'
+    data_name = 'AfD'
 
-    xml_path = f'{data_dir}/{data_name}/AfD.xml'
+    xml_path = f'{data_dir}/{data_name}/{data_name}.xml'
 
     split = [0.8, 0.1, 0.1]
 

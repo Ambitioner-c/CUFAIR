@@ -10,7 +10,6 @@ from tqdm import tqdm, trange
 from transformers import set_seed
 
 import xml.etree.ElementTree as ElementTree
-from xml.dom import minidom
 
 
 class Utterance:
@@ -177,12 +176,12 @@ def main():
     set_seed(2024)
 
     data_dir = '/home/cuifulai/Projects/CQA/Data/WikiPedia'
-    data_name = 'wiki-articles-for-deletion-corpus'
+    data_name = 'AfD'
 
     conversation_path = f'{data_dir}/Outs/{data_name}/idx2label.csv'
     utterance_path = f'{data_dir}/Dumps/{data_name}/utterances.jsonl'
 
-    save_path = f'{data_dir}/Outs/{data_name}/AfD.xml'
+    save_path = f'{data_dir}/Outs/{data_name}/{data_name}.xml'
 
     utterance = Utterance(
         conversation_path,
