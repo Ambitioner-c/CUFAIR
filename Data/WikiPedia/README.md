@@ -9,6 +9,7 @@
 ### 流程
 - [read_conversations.py](read_conversations.py)
 - [read_utterances.py](read_utterances.py)
+- [split_train_dev_test.py](split_train_dev_test.py)
 
 ### Unit
 - [extract_ping.py](extract_ping.py)
