@@ -21,12 +21,14 @@ class Utterance:
             samples: Optional[list] = None,
             shuffle: bool = False,
             save: Optional[str] = False,
+            threshold: int = 1,
     ):
         self.conversation_path = conversation_path
         self.utterance_path = utterance_path
         self.samples = samples
         self.shuffle = shuffle
         self.save = save
+        self.threshold = threshold
 
         self.num = self.samples[0] + self.samples[1]
 
@@ -101,7 +103,7 @@ class Utterance:
                     if temp_nomination is None:
                         temp_nomination = utterance
                     elif conversation_id != temp_nomination['conversation_id']:
-                        if temp_comments:
+                        if len(temp_comments) >= self.threshold:
                             nominations.append(temp_nomination)
                             comments_list.append(temp_comments)
 
@@ -178,6 +180,7 @@ def main():
         samples=[5000, 5000],
         shuffle=True,
         save=save_path,
+        threshold=1,
     )
     utterance.main()
 
