@@ -106,7 +106,13 @@ def main():
     processor = OurProcessor(
         data_name=data_name,
     )
-    processor.get_train_examples(data_dir)
+    train_df = processor.get_train_examples(data_dir)
+    dev_df = processor.get_dev_examples(data_dir)
+    test_df = processor.get_test_examples(data_dir)
+
+    print(train_df.head())
+    print(dev_df.head())
+    print(test_df.head())
 
 
 if __name__ == '__main__':
