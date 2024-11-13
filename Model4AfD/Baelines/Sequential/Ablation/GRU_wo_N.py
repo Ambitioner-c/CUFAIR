@@ -242,7 +242,7 @@ def parse_args():
     parser.add_argument('--task_name', nargs='?', default='GRU_wo_N',
                         help='Task name')
 
-    parser.add_argument('--batch_size', type=int, default=20,
+    parser.add_argument('--batch_size', type=int, default=16,
                         help='Batch size')
     parser.add_argument('--bert_hidden_size', type=int, default=768,
                         help='Bert hidden size')
