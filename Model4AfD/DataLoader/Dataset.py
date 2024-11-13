@@ -85,8 +85,8 @@ class OurDataset(Dataset):
 
     def __getitem__(self, item):
         return {
-            'right': self.right_features[item],
-            'comments': self.comments_features[item],
+            'text_right': self.right_features[item],
+            'comment': self.comments_features[item],
             'label': self.labels[item],
             'ping': self.pings_features[item],
         }
