@@ -4,33 +4,29 @@
 import argparse
 import copy
 import os
-import typing
 from datetime import datetime
 
 import numpy as np
-import pandas as pd
-import spacy
 import torch
 from torch import nn
 from torch.optim import Adam
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import BertModel, set_seed, AutoTokenizer
 
-from LSTM.LSTM import LSTMModel
-from Model.Losses.RankHingeLoss import RankHingeLoss
-from Model.DataLoader.DataLoader import DataLoader
-from Model.DataLoader.DataProcessor import OurProcessor
-from Model.DataLoader.Dataset import OurDataset
-from Model.LSTM.SQACILSTM import SQACILSTMModel
-from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
+from Model4AfD.DataLoader.Dataset import OurDataset
+from Model.LSTM.LSTM import LSTMModel
 
 from warnings import simplefilter
 
 from Model.Unit.cprint import coloring, decoloring
 from Model.Unit.function import mkdir, save_args_to_file, ignore_warning
 from Model.Unit.metrics import (
-    precision, average_precision, mean_average_precision, mean_reciprocal_rank,
-    discounted_cumulative_gain, normalized_discounted_cumulative_gain
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    roc_auc_score,
 )
 
 simplefilter(action='ignore', category=FutureWarning)
@@ -74,33 +70,31 @@ class GuptaModel(nn.Module):
             output_size=hidden_size,
         )
 
-        self.usefulness_layer = nn.Linear(hidden_size * 3, num_labels)
+        self.consensus_layer = nn.Linear(hidden_size * 2, num_labels)
 
         self.dropout = nn.Dropout(dropout_prob)
 
     def forward(self, inputs: dict):
-        text_left = torch.stack([x.to(self.device) for x in inputs['text_left']], dim=0)            # torch.Size([batch_size, max_length])
         text_right = torch.stack([x.to(self.device) for x in inputs['text_right']], dim=0)          # torch.Size([batch_size, max_length])
-        comment = torch.stack([x.to(self.device) for x in inputs['comment']], dim=0)                # torch.Size([batch_size, max_sequence_length, max_length])
+        comment = torch.stack([x.to(self.device) for x in inputs['comment']], dim=0)                # torch.Size([batch_size, seq_length, max_length])
 
-        bert_output_left = self.reduction_layer(self.bert(text_left)['pooler_output'])              # torch.Size([batch_size, hidden_size])
         bert_output_right = self.reduction_layer(self.bert(text_right)['pooler_output'])            # torch.Size([batch_size, hidden_size])
 
         bert_output_comment = []
         for j in range(len(comment)):
             bert_output_comment.append(self.reduction_layer(self.bert(comment[j])['pooler_output']))
-        bert_output_comment = torch.stack(bert_output_comment, dim=0)                               # torch.Size([batch_size, max_sequence_length, hidden_size])
+        bert_output_comment = torch.stack(bert_output_comment, dim=0)                               # torch.Size([batch_size, seq_length, hidden_size])
 
-        # SC
-        source_credibility = self.lstm(bert_output_comment)[:, -1, :]                               # torch.Size([batch_size, hidden_size])
+        # Consensus
+        consensus = self.lstm(bert_output_comment)[:, -1, :]                                        # torch.Size([batch_size, hidden_size])
 
-        usefulness = torch.cat([bert_output_left, bert_output_right, source_credibility], dim=-1)            # torch.Size([batch_size, hidden_size * 3])
-        outputs = self.usefulness_layer(usefulness)[:, 1].unsqueeze(1)                                              # torch.Size([batch_size, 2])
+        outputs = self.consensus_layer(
+            torch.cat([bert_output_right, consensus], dim=-1))                               # torch.Size([batch_size, 2])
 
         return outputs
 
 
-def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, step):
+def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, device, step):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     args_path = f'./Result/Temp/{task_name}-{timestamp}/args.json'
@@ -113,24 +107,22 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
     save_args_to_file(args, mkdir(args_path))
 
     optimizer = Adam(model.parameters(), lr=lr)
-    loss_function = RankHingeLoss(
-        num_neg=args.num_neg,
-    )
+    loss_function = nn.CrossEntropyLoss()
 
     best_model = None
-    (best_p_1, best_p_3, best_p_5, best_ap, best_map), best_mrr, (best_dcg_1, best_dcg_3, best_dcg_5), (best_ndcg_1, best_ndcg_3, best_ndcg_5) = (
-        (-1, -1, -1, -1, -1), -1, (-1, -1, -1), (-1, -1, -1))
+    best_loss = float('inf')
+    best_acc, best_pre, best_rec, best_f1, best_auc = -1, -1, -1, -1, -1
 
     n = 0
     for epoch in range(epochs):
         for train_sample in tqdm(train_dataloader):
-            train_inputs, _ = train_sample
+            train_labels = train_sample['label']
 
             optimizer.zero_grad()
 
-            train_outputs = model(train_inputs)
+            train_outputs = model(train_sample)
 
-            train_loss = loss_function(train_outputs)
+            train_loss = loss_function(input=train_outputs, target=train_labels.view(-1).to(device))
             train_loss.backward()
 
             optimizer.step()
@@ -142,62 +134,56 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
                 f.write(decoloring(temp_train_result) + '\n')
 
             if n % step == 0:
-                predictions = []
+                dev_losses = []
+                dev_accs, dev_pres, dev_recs, dev_f1s, dev_aucs = [], [], [], [], []
                 for dev_sample in dev_dataloader:
-                    dev_inputs, _ = dev_sample
+                    dev_labels = dev_sample['label']
+
                     with torch.no_grad():
-                        dev_outputs = model(dev_inputs).detach().cpu()
-                        predictions.append(dev_outputs)
-                y_pred = torch.cat(predictions, dim=0).numpy()
-                y_true = dev_dataloader.label
-                id_left = dev_dataloader.id_left
-                (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5) = (
-                    eval_ranking_metrics_on_data_frame(id_left, y_true, y_pred.squeeze(axis=-1)))
+                        dev_outputs = model(dev_sample)
+
+                        dev_loss = loss_function(input=dev_outputs, target=dev_labels.view(-1).to(device))
+                        dev_acc, dev_pre, dev_rec, dev_f1, dev_auc = get_metrics(dev_outputs.cpu().numpy(), dev_labels.cpu().numpy())
+
+                        dev_losses.append(dev_loss.item())
+                        dev_accs.append(dev_acc)
+                        dev_pres.append(dev_pre)
+                        dev_recs.append(dev_rec)
+                        dev_f1s.append(dev_f1)
+                        dev_aucs.append(dev_auc)
                 temp_dev_result = (
                     f'{task_name}\t'
                     f'epoch/epochs:{epoch + 1}/{epochs}\t'
-                    f'Ranking:\t'
-                    f'{coloring("p@1", "red_bg")}:{round(p_1, 4)}\t'
-                    f'{coloring("p@3", "red_bg")}:{round(p_3, 4)}\t'
-                    f'{coloring("p@5", "red_bg")}:{round(p_5, 4)}\t'
-                    f'{coloring("ap", "green_bg")}:{round(ap, 4)}\t'
-                    f'{coloring("map", "yellow_bg")}:{round(map_, 4)}\t'
-                    f'{coloring("mrr", "blue_bg")}:{round(mrr, 4)}\t'
-                    f'dcg@1:{round(dcg_1, 4)}\t'
-                    f'dcg@3:{round(dcg_3, 4)}\t'
-                    f'dcg@5:{round(dcg_5, 4)}\t'
-                    f'{coloring("ndcg@1", "purple_bg")}:{round(ndcg_1, 4)}\t'
-                    f'{coloring("ndcg@3", "purple_bg")}:{round(ndcg_3, 4)}\t'
-                    f'{coloring("ndcg@5", "purple_bg")}:{round(ndcg_5, 4)}'
+                    f'{coloring("dev_loss", "red_bg")}:{round(np.mean(dev_losses), 4)}\t'
+                    f'{coloring("dev_acc", "green_bg")}:{round(np.mean(dev_accs), 4)}\t'
+                    f'{coloring("dev_pre", "yellow_bg")}:{round(np.mean(dev_pres), 4)}\t'
+                    f'{coloring("dev_rec", "blue_bg")}:{round(np.mean(dev_recs), 4)}\t'
+                    f'{coloring("dev_f1", "purple_bg")}:{round(np.mean(dev_f1s), 4)}\t'
+                    f'{coloring("dev_auc", "cyan_bg")}:{round(np.mean(dev_aucs), 4)}'
                 )
                 with open(mkdir(temp_dev_tsv), 'a' if os.path.exists(temp_dev_tsv) else 'w') as f:
                     f.write(decoloring(temp_dev_result) + '\n')
                 print(temp_dev_result)
 
-                if best_map < map_:
-                    best_p_1, best_p_3, best_p_5, best_ap = p_1, p_3, p_5, ap
-                    best_map = map_
-                    best_mrr = mrr
-                    best_dcg_1, best_dcg_3, best_dcg_5 = dcg_1, dcg_3, dcg_5
-                    best_ndcg_1, best_ndcg_3, best_ndcg_5 = ndcg_1, ndcg_3, ndcg_5
+                if np.mean(dev_losses) < best_loss:
+                    best_loss = np.mean(dev_losses)
+                    best_acc = np.mean(dev_accs)
+                    best_pre = np.mean(dev_pres)
+                    best_rec = np.mean(dev_recs)
+                    best_f1 = np.mean(dev_f1s)
+                    best_auc = np.mean(dev_aucs)
                     best_model = copy.deepcopy(model)
             n += 1
 
     torch.save(best_model.state_dict(), mkdir(finetuned_model_path))
     best_model.bert.save_pretrained(mkdir(finetuned_bert_model_path))
     best_dev_result = (
-        f'{coloring("best_p@1", "red_bg")}:{round(best_p_1, 4)}\t'
-        f'{coloring("best_p@3", "red_bg")}:{round(best_p_3, 4)}\t'
-        f'{coloring("best_p@5", "red_bg")}:{round(best_p_5, 4)}\t'
-        f'{coloring("best_ap", "green_bg")}:{round(best_ap, 4)}\t'
-        f'{coloring("best_map", "yellow_bg")}:{round(best_map, 4)}\t'
-        f'{coloring("best_mrr", "blue_bg")}:{round(best_mrr, 4)}\t'
-        f'best_dcg@1:{round(best_dcg_1, 4)}\t'
-        f'best_dcg@3:{round(best_dcg_3, 4)}\t'
-        f'best_dcg@5:{round(best_dcg_5, 4)}\t'
-        f'{coloring("best_ndcg@1", "purple_bg")}:{round(best_ndcg_1, 4)}\t'
-        f'{coloring("best_ndcg@3", "purple_bg")}:{round(best_ndcg_3, 4)}\t'
-        f'{coloring("best_ndcg@5", "purple_bg")}:{round(best_ndcg_5, 4)}'
+        f'{coloring("best_loss", "red_bg")}:{best_loss}\t'
+        f'{coloring("best_acc", "green_bg")}:{best_acc}\t'
+        f'{coloring("best_pre", "yellow_bg")}:{best_pre}\t'
+        f'{coloring("best_rec", "blue_bg")}:{best_rec}\t'
+        f'{coloring("best_f1", "purple_bg")}:{best_f1}\t'
+        f'{coloring("best_auc", "cyan_bg")}:{best_auc}'
     )
     with open(mkdir(best_dev_tsv), 'a' if os.path.exists(best_dev_tsv) else 'w') as f:
         f.write(decoloring(best_dev_result) + '\n')
@@ -208,116 +194,76 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
 
     return best_model, timestamp
 
-def get_ranking_metrics(input: np.array, target: np.array, threshold: float = 0.) -> tuple:
-    p_1 = precision(input, target, k=1, threshold=threshold)
-    p_3 = precision(input, target, k=3, threshold=threshold)
-    p_5 = precision(input, target, k=5, threshold=threshold)
-    ap = average_precision(input, target, threshold=threshold)
-    map_ = mean_average_precision(input, target, threshold=threshold)
-    mrr = mean_reciprocal_rank(input, target, threshold=threshold)
-    dcg_1 = discounted_cumulative_gain(input, target, k=1, threshold=threshold)
-    dcg_3 = discounted_cumulative_gain(input, target, k=3, threshold=threshold)
-    dcg_5 = discounted_cumulative_gain(input, target, k=5, threshold=threshold)
-    ndcg_1 = normalized_discounted_cumulative_gain(input, target, k=1, threshold=threshold)
-    ndcg_3 = normalized_discounted_cumulative_gain(input, target, k=3, threshold=threshold)
-    ndcg_5 = normalized_discounted_cumulative_gain(input, target, k=5, threshold=threshold)
 
-    return (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5)
+def get_metrics(input: np.array, target: np.array):
+    acc = accuracy_score(input, target)
+    pre = precision_score(input, target, average='weighted')
+    rec = recall_score(input, target, average='weighted')
+    f1 = f1_score(input, target, average='weighted')
+    try:
+        auc = roc_auc_score(input, target, average='weighted')
+    except ValueError:
+        auc = 0.5
 
-
-def eval_ranking_metrics_on_data_frame(
-        id_left: typing.Any,
-        y_true: typing.Union[list, np.array],
-        y_pred: typing.Union[list, np.array]
-):
-    df = pd.DataFrame(
-        data={
-            'id': id_left,
-            'true': y_true,
-            'pred': y_pred
-        }
-    )
-
-    metrics = df.groupby(by='id').apply(
-        lambda x: get_ranking_metrics(input=x['pred'].values, target=x['true'].values)
-    )
-    p_1 = metrics.apply(lambda x: x[0][0]).mean()
-    p_3 = metrics.apply(lambda x: x[0][1]).mean()
-    p_5 = metrics.apply(lambda x: x[0][2]).mean()
-    ap = metrics.apply(lambda x: x[0][3]).mean()
-    map_ = metrics.apply(lambda x: x[0][4]).mean()
-    mrr = metrics.apply(lambda x: x[1]).mean()
-    dcg_1 = metrics.apply(lambda x: x[2][0]).mean()
-    dcg_3 = metrics.apply(lambda x: x[2][1]).mean()
-    dcg_5 = metrics.apply(lambda x: x[2][2]).mean()
-    ndcg_1 = metrics.apply(lambda x: x[3][0]).mean()
-    ndcg_3 = metrics.apply(lambda x: x[3][1]).mean()
-    ndcg_5 = metrics.apply(lambda x: x[3][2]).mean()
-
-    return (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5)
+    return acc, pre, rec, f1, auc
 
 
 def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
-    predictions = []
+    model.eval()
+
+    test_accs, test_pres, test_recs, test_f1s, test_aucs = [], [], [], [], []
     for test_sample in test_dataloader:
-        test_inputs, _ = test_sample
+        test_labels = test_sample['label']
+
         with torch.no_grad():
-            test_outputs = model(test_inputs).detach().cpu()
-            predictions.append(test_outputs)
-    y_pred = torch.cat(predictions, dim=0).numpy()
-    y_true = test_dataloader.label
-    id_left = test_dataloader.id_left
-    (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5) = (
-        eval_ranking_metrics_on_data_frame(id_left, y_true, y_pred.squeeze(axis=-1)))
+            test_outputs = model(test_sample)
+
+            test_acc, test_pre, test_rec, test_f1, test_auc = get_metrics(test_outputs.cpu().numpy(), test_labels.cpu().numpy())
+
+            test_accs.append(test_acc)
+            test_pres.append(test_pre)
+            test_recs.append(test_rec)
+            test_f1s.append(test_f1)
+            test_aucs.append(test_auc)
     best_test_result = (
         f'{task_name}\t'
-        f'Ranking:\t'
-        f'{coloring("p@1", "red_bg")}:{round(p_1, 4)}\t'
-        f'{coloring("p@3", "red_bg")}:{round(p_3, 4)}\t'
-        f'{coloring("p@5", "red_bg")}:{round(p_5, 4)}\t'
-        f'{coloring("ap", "green_bg")}:{round(ap, 4)}\t'
-        f'{coloring("map", "yellow_bg")}:{round(map_, 4)}\t'
-        f'{coloring("mrr", "blue_bg")}:{round(mrr, 4)}\t'
-        f'dcg@1:{round(dcg_1, 4)}\t'
-        f'dcg@3:{round(dcg_3, 4)}\t'
-        f'dcg@5:{round(dcg_5, 4)}\t'
-        f'{coloring("ndcg@1", "purple_bg")}:{round(ndcg_1, 4)}\t'
-        f'{coloring("ndcg@3", "purple_bg")}:{round(ndcg_3, 4)}\t'
-        f'{coloring("ndcg@5", "purple_bg")}:{round(ndcg_5, 4)}'
+        f'{coloring("test_acc", "green_bg")}:{round(np.mean(test_accs), 4)}\t'
+        f'{coloring("test_pre", "yellow_bg")}:{round(np.mean(test_pres), 4)}\t'
+        f'{coloring("test_rec", "blue_bg")}:{round(np.mean(test_recs), 4)}\t'
+        f'{coloring("test_f1", "purple_bg")}:{round(np.mean(test_f1s), 4)}\t'
+        f'{coloring("test_auc", "cyan_bg")}:{round(np.mean(test_aucs), 4)}'
     )
     if args.is_train or save_test:
         best_test_tsv = f'./Result/Temp/{task_name}-{timestamp}/best_test.tsv'
         with open(mkdir(best_test_tsv), 'a' if os.path.exists(best_test_tsv) else 'w') as f:
             f.write(decoloring(best_test_result) + '\n')
     print(best_test_result)
-    print(f'{p_1}\t{p_3}\t{p_5}\t{ap}\t{map_}\t{mrr}\t{dcg_1}\t{dcg_3}\t{dcg_5}\t{ndcg_1}\t{ndcg_3}\t{ndcg_5}')
+    print(f'{np.mean(test_accs)}\t{np.mean(test_pres)}\t{np.mean(test_recs)}\t{np.mean(test_f1s)}\t{np.mean(test_aucs)}')
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Gupta Model')
-    parser.add_argument('--task_name', nargs='?', default='Gupta',
+    parser = argparse.ArgumentParser(description='Gupta Model for AfD')
+    parser.add_argument('--task_name', nargs='?', default='Gupta4AfD',
                         help='Task name')
 
-    parser.add_argument('--batch_size', type=int, default=4,
+    parser.add_argument('--batch_size', type=int, default=100,
                         help='Batch size')
     parser.add_argument('--bert_hidden_size', type=int, default=768,
                         help='Bert hidden size')
     parser.add_argument('--ci_mode', nargs='?', default='all',
                         help='CI Mode')
-    parser.add_argument('--data_dir', nargs='?', default='/home/cuifulai/Projects/CQA/Data/StackExchange',
+    parser.add_argument('--data_dir', nargs='?', default='/home/cuifulai/Projects/CQA/Data/WikiPedia',
                         help='Data directory')
-    parser.add_argument('--data_name', nargs='?', default='meta.stackoverflow.com',
+    parser.add_argument('--data_name', nargs='?', default='AfD',
                         help='Data name')
     parser.add_argument('--device', nargs='?', default='cuda:1',
                         help='Device')
     parser.add_argument('--dropout_prob', type=float, default=0.1,
                         help='Dropout probability')
-    parser.add_argument('--epochs', type=int, default=5,
+    parser.add_argument('--epochs', type=int, default=10,
                         help='Number of epochs')
-    parser.add_argument('--finetuned_model_path', nargs='?', default='./FinetunedModel/Our_model-20241004_191930/best_model.pth',
+    parser.add_argument('--finetuned_model_path', nargs='?', default='./FinetunedModel/XXX/best_model.pth',
                         help='Finetuned model path')
-    parser.add_argument('--fold', type=int, default=1,
-                        help='Fold')
     parser.add_argument('--freeze', type=bool, default=True,
                         help='Freeze')
     parser.add_argument('--hidden_size', type=int, default=108,
@@ -328,24 +274,12 @@ def parse_args():
                         help='Is peephole')
     parser.add_argument('--is_train', type=bool, default=True,
                         help='Is train')
-    parser.add_argument('--limit', nargs='?', default=[0, 0, 0],
-                        help='Limit')
     parser.add_argument('--lr', type=float, default=2e-5,
                         help='Learning rate')
-    parser.add_argument('--max_length', type=int, default=256,
+    parser.add_argument('--max_length', type=int, default=128,
                         help='Max length')
-    parser.add_argument('--max_seq_length', type=int, default=5,
-                        help='Max sequence length')
-    parser.add_argument('--min_seq_length', type=int, default=5,
-                        help='Min sequence length')
-    parser.add_argument('--normalize', type=bool, default=True,
-                        help='Normalize')
     parser.add_argument('--num_attention_heads', type=int, default=12,
                         help='Number of attention heads')
-    parser.add_argument('--num_dup', type=int, default=1,
-                        help='Number of duplications')
-    parser.add_argument('--num_neg', type=int, default=1,
-                        help='Number of negative samples')
     parser.add_argument('--num_labels', type=int, default=2,
                         help='Number of labels')
     parser.add_argument('--num_layers', type=int, default=1,
@@ -356,12 +290,10 @@ def parse_args():
                         help='Save test')
     parser.add_argument('--seed', type=int, default=2024,
                         help='Random seed')
-    parser.add_argument('--spacy_path', nargs='?', default='/data/cuifulai/Spacy/en_core_web_sm-3.7.1/en_core_web_sm/en_core_web_sm-3.7.1',
-                        help='Spacy path')
+    parser.add_argument('--seq_length', type=int, default=10,
+                        help='Max sequence length')
     parser.add_argument('--step', type=int, default=1,
                         help='Step')
-    parser.add_argument('--threshold', type=int, default=5,
-                        help='Threshold')
 
     return parser.parse_args()
 
@@ -371,75 +303,40 @@ def main():
 
     set_seed(args.seed)
 
-    argument_quality = ArgumentQuality(spacy.load(args.spacy_path))
     tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model_path)
 
     if args.is_train:
-        train_dp = OurProcessor(
-            data_name=args.data_name,
-            stage='train',
-            task='ranking',
-            filtered=False,
-            threshold=args.threshold,
-            normalize=args.normalize,
-            return_classes=False,
-            limit=args.limit[0],
-            max_length=args.max_length,
-            max_seq_length=args.max_seq_length,
-            mode='accept',
-            fold=args.fold,
-            min_seq_length=args.min_seq_length,
-        ).get_train_examples(args.data_dir)
         train_dataset = OurDataset(
-            argument_quality=argument_quality,
             tokenizer=tokenizer,
-            data_pack=train_dp,
-            mode='pair',
-            num_dup=args.num_dup,
-            num_neg=args.num_neg,
-            batch_size=args.batch_size,
-            resample=True,
-            shuffle=True,
-            max_length=args.max_length
+            data_dir=args.data_dir,
+            data_name=args.data_name,
+            max_length=args.max_length,
+            mode='train',
+            seq_length=args.seq_length,
         )
-        train_dataloader = DataLoader(
-            train_dataset,
-            stage='train'
-        )
+        train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     else:
         train_dataloader = None
 
-    test_dp = OurProcessor(
+    dev_dataset = OurDataset(
+        tokenizer=tokenizer,
+        data_dir=args.data_dir,
         data_name=args.data_name,
-        stage='test',
-        task='ranking',
-        filtered=True,
-        threshold=args.threshold,
-        normalize=args.normalize,
-        return_classes=False,
-        limit=args.limit[2],
         max_length=args.max_length,
-        max_seq_length=args.max_seq_length,
-        mode='accept',
-        fold=args.fold,
-        min_seq_length=args.min_seq_length,
-    ).get_test_examples(args.data_dir)
+        mode='dev',
+        seq_length=args.seq_length,
+    )
+    dev_dataloader = DataLoader(dev_dataset, batch_size=args.batch_size, shuffle=False)
 
     test_dataset = OurDataset(
-        argument_quality=argument_quality,
         tokenizer=tokenizer,
-        data_pack=test_dp,
-        mode='point',
-        batch_size=args.batch_size,
-        resample=False,
-        shuffle=False,
-        max_length=args.max_length
+        data_dir=args.data_dir,
+        data_name=args.data_name,
+        max_length=args.max_length,
+        mode='test',
+        seq_length=args.seq_length,
     )
-
-    test_dataloader = DataLoader(
-        test_dataset,
-        stage='test'
-    )
+    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
 
@@ -452,6 +349,7 @@ def main():
         dropout_prob=args.dropout_prob,
         num_layers=args.num_layers,
         num_attention_heads=args.num_attention_heads,
+        num_labels=args.num_labels,
         is_peephole=args.is_peephole,
         ci_mode=args.ci_mode,
     ).to(device)
@@ -460,9 +358,10 @@ def main():
     if args.is_from_finetuned:
         model.load_state_dict(torch.load(args.finetuned_model_path))
     if args.is_train:
-        model, timestamp = train(args, args.task_name, model, train_dataloader, test_dataloader, args.epochs, args.lr, args.step)
+        model, timestamp = train(args, args.task_name, model, train_dataloader, dev_dataloader, args.epochs, args.lr, device, args.step)
 
     evaluate(args, args.task_name, model, test_dataloader, timestamp, args.save_test)
+
 
 if __name__ == '__main__':
     main()
