@@ -91,6 +91,10 @@ class OurDataset(Dataset):
             'ping': self.pings_features[item],
         }
 
+    @staticmethod
+    def decode_tokenizer(tokenizer, input_ids):
+        return tokenizer.decode(input_ids, skip_special_tokens=True)
+
 
 def main():
     data_dir = '/home/cuifulai/Projects/CQA/Data/WikiPedia'
