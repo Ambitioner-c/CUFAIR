@@ -106,7 +106,7 @@ class Utterance:
                     if temp_nomination is None:
                         temp_nomination = utterance
                     elif conversation_id != temp_nomination['conversation_id']:
-                        if len(temp_comments) >= self.threshold:
+                        if len(temp_comments) >= self.threshold and len(temp_nomination['text']) != 0:
                             nominations.append(temp_nomination)
 
                             temp_comments = self.sort_by_timestamp(temp_comments)
