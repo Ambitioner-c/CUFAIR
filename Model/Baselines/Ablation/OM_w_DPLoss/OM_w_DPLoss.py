@@ -123,7 +123,7 @@ class OurModel(nn.Module):
         usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
         outputs = self.usefulness_layer(usefulness)[:, 1].unsqueeze(1)                                              # torch.Size([batch_size, 1])
 
-        dot_products = torch.mean(argument_quality * source_credibility, dim=-1)                                    # torch.Size([batch_size])
+        dot_products = torch.sum(argument_quality * source_credibility, dim=-1)                                    # torch.Size([batch_size])
         dot_products = dot_products / math.sqrt(argument_quality.size(-1))
 
         return outputs, self.community_support_layer(source_credibility), dot_products
