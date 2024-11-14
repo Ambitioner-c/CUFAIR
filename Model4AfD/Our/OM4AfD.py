@@ -260,7 +260,7 @@ def parse_args():
                         help='Data directory')
     parser.add_argument('--data_name', nargs='?', default='AfD',
                         help='Data name')
-    parser.add_argument('--device', nargs='?', default='cuda:1',
+    parser.add_argument('--device', nargs='?', default='cuda:0',
                         help='Device')
     parser.add_argument('--dropout_prob', type=float, default=0.1,
                         help='Dropout probability')
@@ -294,9 +294,9 @@ def parse_args():
                         help='Save test')
     parser.add_argument('--seed', type=int, default=2024,
                         help='Random seed')
-    parser.add_argument('--seq_length', type=int, default=10,
+    parser.add_argument('--seq_length', type=int, default=12,
                         help='Max sequence length')
-    parser.add_argument('--step', type=int, default=1,
+    parser.add_argument('--step', type=int, default=100,
                         help='Step')
 
     return parser.parse_args()
