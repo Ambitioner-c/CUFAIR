@@ -46,9 +46,10 @@ class Split:
             switch = True
             if self.filtered:
                 for answer in answers:
-                    if answer.attrib['ACCEPTED_ANSWER'] == 'Yes':
-                        switch = False
-                        break
+                    if self.num_answers == 2:
+                        if answer.attrib['ACCEPTED_ANSWER'] == 'Yes':
+                            switch = False
+                            break
                     if int(answer.attrib['COMMENT_COUNT']) < self.num_comments:
                         switch = False
                         break
