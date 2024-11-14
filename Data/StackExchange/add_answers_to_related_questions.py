@@ -4,6 +4,7 @@
 import re
 import xml.etree.ElementTree as ElementTree
 from time import sleep
+from typing import Optional
 from xml.dom import minidom
 
 from tqdm import tqdm
@@ -29,13 +30,16 @@ class Restructure:
             rel_dict: dict = None,
             save: str = None,
             num_answers: int = 2,
-            threshold: int = 10,
+            threshold: Optional[int] = 5,
     ):
         self.data_name = data_name
         self.rel_dict = rel_dict
         self.save = save
         self.num_answers = num_answers
-        self.threshold = threshold
+        if threshold:
+            self.threshold = threshold
+        else:
+            self.threshold = num_answers * 2
 
         with open(f'./{self.data_name}/{self.data_name}.xml', 'r', encoding='utf-8') as f:
             self.root = ElementTree.parse(f).getroot()
@@ -55,7 +59,7 @@ class Restructure:
 
             # Candidate Threads
             c_q_ids = self.rel_dict[q_id]
-            for c_q_id in c_q_ids[:5]:
+            for c_q_id in c_q_ids[:self.threshold]:
                 c_q_elem = self.search(c_q_id)
 
                 if c_q_elem is not None:
@@ -72,6 +76,9 @@ class Restructure:
                     length += len(c_answers)
                     if length >= self.threshold:
                         break
+            if self.threshold != 5:
+                while len(elem.findall('Answer')) > self.threshold:
+                    elem.remove(elem.findall('Answer')[-1])
             self.write_file(elem)
 
     def write_file(self, thread):
@@ -117,7 +124,7 @@ def main():
     data_name = 'meta.stackoverflow.com'
     num_answers = 2
 
-    threshold = 10
+    threshold = 5
 
     related_questions_filepath = f'./{data_name}/Situation2/related_questions_{str(num_answers)}.txt'
     rel_dict = read_related_questions(related_questions_filepath)
