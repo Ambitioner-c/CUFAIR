@@ -163,8 +163,8 @@ def evaluate(args, task_name, model, test_dataloader, timestamp):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Our Model for Situation 2')
-    parser.add_argument('--task_name', nargs='?', default='OM4Situation2',
+    parser = argparse.ArgumentParser(description='Our Model with DPLoss for Situation 2')
+    parser.add_argument('--task_name', nargs='?', default='OM_w_DPLoss4Situation2',
                         help='Task name')
 
     parser.add_argument('--alpha', type=float, default=0.8,
