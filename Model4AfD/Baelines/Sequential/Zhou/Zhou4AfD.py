@@ -247,7 +247,7 @@ def parse_args():
     parser.add_argument('--task_name', nargs='?', default='Zhou4AfD',
                         help='Task name')
 
-    parser.add_argument('--batch_size', type=int, default=100,
+    parser.add_argument('--batch_size', type=int, default=20,
                         help='Batch size')
     parser.add_argument('--bert_hidden_size', type=int, default=768,
                         help='Bert hidden size')
@@ -257,15 +257,15 @@ def parse_args():
                         help='Data directory')
     parser.add_argument('--data_name', nargs='?', default='AfD',
                         help='Data name')
-    parser.add_argument('--device', nargs='?', default='cuda:1',
+    parser.add_argument('--device', nargs='?', default='cuda:3',
                         help='Device')
     parser.add_argument('--dropout_prob', type=float, default=0.1,
                         help='Dropout probability')
-    parser.add_argument('--epochs', type=int, default=10,
+    parser.add_argument('--epochs', type=int, default=3,
                         help='Number of epochs')
     parser.add_argument('--finetuned_model_path', nargs='?', default='./FinetunedModel/XXX/best_model.pth',
                         help='Finetuned model path')
-    parser.add_argument('--freeze', type=bool, default=True,
+    parser.add_argument('--freeze', type=bool, default=False,
                         help='Freeze')
     parser.add_argument('--hidden_size', type=int, default=108,
                         help='Hidden size')
@@ -293,7 +293,7 @@ def parse_args():
                         help='Random seed')
     parser.add_argument('--seq_length', type=int, default=10,
                         help='Max sequence length')
-    parser.add_argument('--step', type=int, default=1,
+    parser.add_argument('--step', type=int, default=100,
                         help='Step')
 
     return parser.parse_args()
