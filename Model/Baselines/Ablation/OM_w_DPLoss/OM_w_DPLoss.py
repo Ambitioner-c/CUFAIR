@@ -316,7 +316,7 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
             mse_loss = mse_loss_function(input=test_output_supports[mask], target=supports[mask].to(model.device))
             mae_loss = mae_loss_function(input=test_output_supports[mask], target=supports[mask].to(model.device))
 
-            dot_product_loss = torch.mean(test_output_dot_products)
+            dot_product_loss = torch.mean(torch.sqrt(test_output_dot_products**2))
             dot_product_losses.append(dot_product_loss.item())
 
             if not torch.isnan(mse_loss):
