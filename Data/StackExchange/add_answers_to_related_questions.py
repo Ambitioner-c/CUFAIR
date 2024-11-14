@@ -126,7 +126,10 @@ def main():
 
     threshold = 5
 
-    related_questions_filepath = f'./{data_name}/Situation2/related_questions_{str(num_answers)}.txt'
+    if num_answers == 2:
+        related_questions_filepath = f'./{data_name}/Situation2/related_questions.txt'
+    else:
+        related_questions_filepath = f'./{data_name}/Situation2/related_questions_{str(num_answers)}.txt'
     rel_dict = read_related_questions(related_questions_filepath)
 
     save = f'./{data_name}/Situation2/{data_name}_{str(num_answers)}.xml'
