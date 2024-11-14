@@ -7,6 +7,7 @@ import os
 import typing
 from datetime import datetime
 
+import math
 import numpy as np
 import pandas as pd
 import spacy
@@ -122,7 +123,10 @@ class OurModel(nn.Module):
         usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
         outputs = self.usefulness_layer(usefulness)[:, 1].unsqueeze(1)                                              # torch.Size([batch_size, 1])
 
-        return outputs, self.community_support_layer(source_credibility)
+        dot_products = torch.mean(argument_quality * source_credibility, dim=-1)                                    # torch.Size([batch_size])
+        dot_products = dot_products / math.sqrt(argument_quality.size(-1))
+
+        return outputs, self.community_support_layer(source_credibility), dot_products
 
 
 def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, device, step):
@@ -156,13 +160,15 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
 
             optimizer.zero_grad()
 
-            train_outputs, train_output_supports = model(train_inputs)
+            train_outputs, train_output_supports, train_output_dot_products = model(train_inputs)
 
             train_loss = loss_function(train_outputs)
             train_support_loss = support_loss_function(input=train_output_supports[mask], target=supports[mask].to(device))
+            train_dot_product_loss = torch.mean(train_output_dot_products)
 
             if not torch.isnan(train_support_loss):
                 train_loss = args.alpha * train_loss + (1 - args.alpha) * train_support_loss
+            train_loss = train_loss + train_dot_product_loss
 
             train_loss.backward()
 
@@ -171,7 +177,8 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
             temp_train_result = (f'{task_name}\t'
                                  f'epoch/epochs:{epoch + 1}/{epochs}\t'
                                  f'{coloring("train_loss", "red_bg")}:{train_loss.item()}\t'
-                                 f'{coloring("train_support_loss", "green_bg")}:{train_support_loss.item()}')
+                                 f'{coloring("train_support_loss", "green_bg")}:{train_support_loss.item()}\t'
+                                 f'{coloring("train_dot_product_loss", "yellow_bg")}:{train_dot_product_loss.item()}')
             with open(mkdir(temp_train_tsv), 'a' if os.path.exists(temp_train_tsv) else 'w') as f:
                 f.write(decoloring(temp_train_result) + '\n')
 
@@ -298,15 +305,19 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
     predictions = []
     mse_losses = []
     mae_losses = []
+    dot_product_losses = []
     for test_sample in test_dataloader:
         test_inputs, _, supports = test_sample
         mask = supports >= 0
 
         with torch.no_grad():
-            test_outputs, test_output_supports = model(test_inputs)
+            test_outputs, test_output_supports, test_output_dot_products = model(test_inputs)
 
             mse_loss = mse_loss_function(input=test_output_supports[mask], target=supports[mask].to(model.device))
             mae_loss = mae_loss_function(input=test_output_supports[mask], target=supports[mask].to(model.device))
+
+            dot_product_loss = torch.mean(test_output_dot_products)
+            dot_product_losses.append(dot_product_loss.item())
 
             if not torch.isnan(mse_loss):
                 mse_losses.append(mse_loss.item())
@@ -323,6 +334,7 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
         f'{task_name}\t'
         f'{coloring("mse_loss", "purple_bg")}:{np.mean(mse_losses)}\t'
         f'{coloring("mae_loss", "purple_bg")}:{np.mean(mae_losses)}\t'
+        f'{coloring("dot_product_loss", "purple_bg")}:{np.mean(dot_product_losses)}\t'
         f'Ranking:\t'
         f'{coloring("p@1", "red_bg")}:{round(p_1, 4)}\t'
         f'{coloring("p@3", "red_bg")}:{round(p_3, 4)}\t'
@@ -346,8 +358,8 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Our Model')
-    parser.add_argument('--task_name', nargs='?', default='OM',
+    parser = argparse.ArgumentParser(description='Our with Dot Product Loss Model')
+    parser.add_argument('--task_name', nargs='?', default='OM_w_DPLoss',
                         help='Task name')
 
     parser.add_argument('--alpha', type=float, default=0.8,
