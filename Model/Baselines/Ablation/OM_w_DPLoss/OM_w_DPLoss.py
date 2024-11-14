@@ -164,7 +164,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
 
             train_loss = loss_function(train_outputs)
             train_support_loss = support_loss_function(input=train_output_supports[mask], target=supports[mask].to(device))
-            train_dot_product_loss = torch.mean(train_output_dot_products)
+            train_dot_product_loss = torch.mean(torch.sqrt(train_output_dot_products**2))
 
             if not torch.isnan(train_support_loss):
                 train_loss = args.alpha * train_loss + (1 - args.alpha) * train_support_loss
