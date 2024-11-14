@@ -295,7 +295,7 @@ def parse_args():
                         help='Random seed')
     parser.add_argument('--seq_length', type=int, default=10,
                         help='Max sequence length')
-    parser.add_argument('--step', type=int, default=100,
+    parser.add_argument('--step', type=int, default=1,
                         help='Step')
 
     return parser.parse_args()
