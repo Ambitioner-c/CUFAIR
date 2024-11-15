@@ -2,21 +2,18 @@
 # @Author: Fulai Cui (cuifulai@mail.hfut.edu.cn)
 # @Time: 2024/10/8 14:32
 import argparse
-import copy
-import os
 import typing
-from datetime import datetime
 
 import numpy as np
 import pandas as pd
 import spacy
 import torch
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
 from torch import nn
-from torch.optim import Adam
 from tqdm import tqdm
 from transformers import BertModel, set_seed, AutoTokenizer
 
-from Model.Losses.RankHingeLoss import RankHingeLoss
 from Model.DataLoader.DataLoader import DataLoader
 from Model.DataLoader.DataProcessor import OurProcessor
 from Model.DataLoader.Dataset import OurDataset
@@ -24,8 +21,8 @@ from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 
 from warnings import simplefilter
 
-from Model.Unit.cprint import coloring, decoloring
-from Model.Unit.function import mkdir, save_args_to_file, ignore_warning
+from Model.Unit.cprint import coloring
+from Model.Unit.function import ignore_warning
 from Model.Unit.metrics import (
     precision, average_precision, mean_average_precision, mean_reciprocal_rank,
     discounted_cumulative_gain, normalized_discounted_cumulative_gain
@@ -37,25 +34,16 @@ simplefilter(action='ignore', category=DeprecationWarning)
 ignore_warning(name="transformers")
 
 
-class LinearRegressionModel(nn.Module):
+class SVMModel:
     def __init__(
             self,
             freeze: bool = False,
             pretrained_model_name_or_path: str = 'bert-base-uncased',
             device: torch.device = torch.device('cuda:0'),
-            hidden_size: int = 108,
-            bert_hidden_size: int = 768,
-            dropout_prob: float = 0.1,
-            num_layers: int = 1,
-            num_attention_heads: int = 12,
-            num_labels: int = 2,
-            is_peephole: bool = False,
-            ci_mode: str = 'all',
     ):
-        super(LinearRegressionModel, self).__init__()
         self.device = device
 
-        self.bert = BertModel.from_pretrained(pretrained_model_name_or_path)
+        self.bert = BertModel.from_pretrained(pretrained_model_name_or_path).to(self.device)
         for p in self.bert.parameters():
             p.data = p.data.contiguous()
 
@@ -63,143 +51,84 @@ class LinearRegressionModel(nn.Module):
             for p in self.bert.parameters():
                 p.requires_grad = False
 
-        self.feature_norm = nn.BatchNorm1d(44)
+        self.feature_norm = nn.BatchNorm1d(44).to(self.device)
 
-        self.usefulness_layer = nn.Linear(45, 1)
+        self.scaler = StandardScaler()
+        self.svc = SVC(kernel='linear', C=1.0, random_state=2024)
 
-    def forward(self, inputs: dict):
-        text_left = torch.stack([x.to(self.device) for x in inputs['text_left']], dim=0)            # torch.Size([batch_size, max_length])
-        text_right = torch.stack([x.to(self.device) for x in inputs['text_right']], dim=0)          # torch.Size([batch_size, max_length])
-        feature = torch.stack([torch.tensor(x).to(self.device) for x in inputs['feature']], dim=0)  # torch.Size([batch_size, 44])
+    def forward(self, inputs):
+        text_left = torch.stack([x.to(self.device) for x in inputs['text_left']], dim=0)                # torch.Size([batch_size, max_length])
+        text_right = torch.stack([x.to(self.device) for x in inputs['text_right']],dim=0)               # torch.Size([batch_size, max_length])
+        feature = torch.stack([torch.tensor(x).to(self.device) for x in inputs['feature']], dim=0)      # torch.Size([batch_size, 44])
         try:
             feature = self.feature_norm(feature)                                                        # torch.Size([batch_size, 44])
         except ValueError:
             feature = feature
 
-        bert_output_left = self.bert(text_left)['pooler_output']                                    # torch.Size([batch_size, bert_hidden_size])
-        bert_output_right = self.bert(text_right)['pooler_output']                                  # torch.Size([batch_size, bert_hidden_size])
+        bert_output_left = self.bert(text_left)['pooler_output']                                        # torch.Size([batch_size, bert_hidden_size])
+        bert_output_right = self.bert(text_right)['pooler_output']                                      # torch.Size([batch_size, bert_hidden_size])
 
         # AQ
         # Relevancy
         relevancy = torch.nn.functional.cosine_similarity(
-            bert_output_left, bert_output_right, dim=-1)                                            # torch.Size([batch_size, 1])
+            bert_output_left, bert_output_right, dim=-1)                                                # torch.Size([batch_size, 1])
 
-        argument_quality = torch.cat([relevancy.unsqueeze(-1), feature], dim=-1)             # torch.Size([batch_size, 45])
+        argument_quality = torch.cat([relevancy.unsqueeze(-1), feature], dim=-1)                 # torch.Size([batch_size, 45])
 
-        outputs = self.usefulness_layer(argument_quality)                                           # torch.Size([batch_size, 1])
+        return argument_quality.detach().cpu().numpy()
 
-        return outputs
+    def train(self, train_dataloader):
+        all_features = []
 
-
-def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, device, step):
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    args_path = f'./Result/Temp/{task_name}-{timestamp}/args.json'
-    temp_train_tsv = f'./Result/Temp/{task_name}-{timestamp}/train.tsv'
-    temp_dev_tsv = f'./Result/Temp/{task_name}-{timestamp}/dev.tsv'
-    best_dev_tsv = f'./Result/Temp/{task_name}-{timestamp}/best_dev.tsv'
-    finetuned_model_path = f'./FinetunedModel/{task_name}-{timestamp}/best_model.pth'
-    finetuned_bert_model_path = f'./FinetunedModel/{task_name}-{timestamp}/bert-base-uncased'
-
-    save_args_to_file(args, mkdir(args_path))
-
-    optimizer = Adam(model.parameters(), lr=lr)
-    loss_function = RankHingeLoss(
-        margin=args.margin,
-        num_neg=args.num_neg,
-    )
-
-    best_model = None
-    (best_p_1, best_p_3, best_p_5, best_ap, best_map), best_mrr, (best_dcg_1, best_dcg_3, best_dcg_5), (best_ndcg_1, best_ndcg_3, best_ndcg_5) = (
-        (-1, -1, -1, -1, -1), -1, (-1, -1, -1), (-1, -1, -1))
-
-    n = 0
-    for epoch in range(epochs):
         for train_sample in tqdm(train_dataloader):
             train_inputs, _, _ = train_sample
 
-            optimizer.zero_grad()
+            features = self.forward(train_inputs)
+            all_features.append(features)
+        all_features = np.vstack(all_features)
+        all_labels = train_dataloader.label
 
-            train_outputs = model(train_inputs)
+        all_features = self.scaler.fit_transform(all_features)
 
-            train_loss = loss_function(train_outputs)
+        self.svc.fit(all_features, all_labels)
 
-            train_loss.backward()
+    def predict(self, test_dataloader):
+        all_features = []
 
-            optimizer.step()
+        for test_sample in test_dataloader:
+            test_inputs, _, _ = test_sample
 
-            temp_train_result = (f'{task_name}\t'
-                                 f'epoch/epochs:{epoch + 1}/{epochs}\t'
-                                 f'{coloring("train_loss", "red_bg")}:{train_loss.item()}')
-            with open(mkdir(temp_train_tsv), 'a' if os.path.exists(temp_train_tsv) else 'w') as f:
-                f.write(decoloring(temp_train_result) + '\n')
+            features = self.forward(test_inputs)
+            all_features.append(features)
+        all_features = np.vstack(all_features)
 
-            if n % step == 0:
-                predictions = []
-                for dev_sample in dev_dataloader:
-                    dev_inputs, _, _ = dev_sample
-                    with torch.no_grad():
-                        dev_outputs = model(dev_inputs).detach().cpu()
-                        predictions.append(dev_outputs)
-                y_pred = torch.cat(predictions, dim=0).numpy()
-                y_true = dev_dataloader.label
-                id_left = dev_dataloader.id_left
-                (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5) = (
-                    eval_ranking_metrics_on_data_frame(id_left, y_true, y_pred.squeeze(axis=-1)))
-                temp_dev_result = (
-                    f'{task_name}\t'
-                    f'epoch/epochs:{epoch + 1}/{epochs}\t'
-                    f'Ranking:\t'
-                    f'{coloring("p@1", "red_bg")}:{round(p_1, 4)}\t'
-                    f'{coloring("p@3", "red_bg")}:{round(p_3, 4)}\t'
-                    f'{coloring("p@5", "red_bg")}:{round(p_5, 4)}\t'
-                    f'{coloring("ap", "green_bg")}:{round(ap, 4)}\t'
-                    f'{coloring("map", "yellow_bg")}:{round(map_, 4)}\t'
-                    f'{coloring("mrr", "blue_bg")}:{round(mrr, 4)}\t'
-                    f'dcg@1:{round(dcg_1, 4)}\t'
-                    f'dcg@3:{round(dcg_3, 4)}\t'
-                    f'dcg@5:{round(dcg_5, 4)}\t'
-                    f'{coloring("ndcg@1", "purple_bg")}:{round(ndcg_1, 4)}\t'
-                    f'{coloring("ndcg@3", "purple_bg")}:{round(ndcg_3, 4)}\t'
-                    f'{coloring("ndcg@5", "purple_bg")}:{round(ndcg_5, 4)}'
-                )
-                with open(mkdir(temp_dev_tsv), 'a' if os.path.exists(temp_dev_tsv) else 'w') as f:
-                    f.write(decoloring(temp_dev_result) + '\n')
-                print(temp_dev_result)
+        all_features = self.scaler.transform(all_features)
 
-                if best_map < map_:
-                    best_p_1, best_p_3, best_p_5, best_ap = p_1, p_3, p_5, ap
-                    best_map = map_
-                    best_mrr = mrr
-                    best_dcg_1, best_dcg_3, best_dcg_5 = dcg_1, dcg_3, dcg_5
-                    best_ndcg_1, best_ndcg_3, best_ndcg_5 = ndcg_1, ndcg_3, ndcg_5
-                    best_model = copy.deepcopy(model)
-            n += 1
+        y_pred = self.svc.predict(all_features)
+        y_true = test_dataloader.label
+        id_left = test_dataloader.id_left
 
-    torch.save(best_model.state_dict(), mkdir(finetuned_model_path))
-    best_model.bert.save_pretrained(mkdir(finetuned_bert_model_path))
-    best_dev_result = (
-        f'{coloring("best_p@1", "red_bg")}:{round(best_p_1, 4)}\t'
-        f'{coloring("best_p@3", "red_bg")}:{round(best_p_3, 4)}\t'
-        f'{coloring("best_p@5", "red_bg")}:{round(best_p_5, 4)}\t'
-        f'{coloring("best_ap", "green_bg")}:{round(best_ap, 4)}\t'
-        f'{coloring("best_map", "yellow_bg")}:{round(best_map, 4)}\t'
-        f'{coloring("best_mrr", "blue_bg")}:{round(best_mrr, 4)}\t'
-        f'best_dcg@1:{round(best_dcg_1, 4)}\t'
-        f'best_dcg@3:{round(best_dcg_3, 4)}\t'
-        f'best_dcg@5:{round(best_dcg_5, 4)}\t'
-        f'{coloring("best_ndcg@1", "purple_bg")}:{round(best_ndcg_1, 4)}\t'
-        f'{coloring("best_ndcg@3", "purple_bg")}:{round(best_ndcg_3, 4)}\t'
-        f'{coloring("best_ndcg@5", "purple_bg")}:{round(best_ndcg_5, 4)}'
-    )
-    with open(mkdir(best_dev_tsv), 'a' if os.path.exists(best_dev_tsv) else 'w') as f:
-        f.write(decoloring(best_dev_result) + '\n')
-    print(best_dev_result)
+        (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5) = (
+            eval_ranking_metrics_on_data_frame(id_left, y_true, y_pred))
+        best_test_result = (
+            f'{'SVM'}\t'
+            f'Ranking:\t'
+            f'{coloring("p@1", "red_bg")}:{round(p_1, 4)}\t'
+            f'{coloring("p@3", "red_bg")}:{round(p_3, 4)}\t'
+            f'{coloring("p@5", "red_bg")}:{round(p_5, 4)}\t'
+            f'{coloring("ap", "green_bg")}:{round(ap, 4)}\t'
+            f'{coloring("map", "yellow_bg")}:{round(map_, 4)}\t'
+            f'{coloring("mrr", "blue_bg")}:{round(mrr, 4)}\t'
+            f'dcg@1:{round(dcg_1, 4)}\t'
+            f'dcg@3:{round(dcg_3, 4)}\t'
+            f'dcg@5:{round(dcg_5, 4)}\t'
+            f'{coloring("ndcg@1", "purple_bg")}:{round(ndcg_1, 4)}\t'
+            f'{coloring("ndcg@3", "purple_bg")}:{round(ndcg_3, 4)}\t'
+            f'{coloring("ndcg@5", "purple_bg")}:{round(ndcg_5, 4)}'
+        )
+        print(best_test_result)
+        print(f'{p_1}\t{p_3}\t{p_5}\t{ap}\t{map_}\t{mrr}\t{dcg_1}\t{dcg_3}\t{dcg_5}\t{ndcg_1}\t{ndcg_3}\t{ndcg_5}')
 
-    print(f'{coloring("Finetuned model path", "red_bg")}: {finetuned_model_path}')
-    print(f'{coloring("Finetuned bert model path", "green_bg")}: {finetuned_bert_model_path}')
-
-    return best_model, timestamp
 
 def get_ranking_metrics(input: np.array, target: np.array, threshold: float = 0.) -> tuple:
     p_1 = precision(input, target, k=1, threshold=threshold)
@@ -250,47 +179,9 @@ def eval_ranking_metrics_on_data_frame(
     return (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5)
 
 
-def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
-    predictions = []
-    for test_sample in test_dataloader:
-        test_inputs, _, _ = test_sample
-
-        with torch.no_grad():
-            test_outputs = model(test_inputs)
-
-            predictions.append(test_outputs.detach().cpu())
-    y_pred = torch.cat(predictions, dim=0).numpy()
-    y_true = test_dataloader.label
-    id_left = test_dataloader.id_left
-    (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5) = (
-        eval_ranking_metrics_on_data_frame(id_left, y_true, y_pred.squeeze(axis=-1)))
-    best_test_result = (
-        f'{task_name}\t'
-        f'Ranking:\t'
-        f'{coloring("p@1", "red_bg")}:{round(p_1, 4)}\t'
-        f'{coloring("p@3", "red_bg")}:{round(p_3, 4)}\t'
-        f'{coloring("p@5", "red_bg")}:{round(p_5, 4)}\t'
-        f'{coloring("ap", "green_bg")}:{round(ap, 4)}\t'
-        f'{coloring("map", "yellow_bg")}:{round(map_, 4)}\t'
-        f'{coloring("mrr", "blue_bg")}:{round(mrr, 4)}\t'
-        f'dcg@1:{round(dcg_1, 4)}\t'
-        f'dcg@3:{round(dcg_3, 4)}\t'
-        f'dcg@5:{round(dcg_5, 4)}\t'
-        f'{coloring("ndcg@1", "purple_bg")}:{round(ndcg_1, 4)}\t'
-        f'{coloring("ndcg@3", "purple_bg")}:{round(ndcg_3, 4)}\t'
-        f'{coloring("ndcg@5", "purple_bg")}:{round(ndcg_5, 4)}'
-    )
-    if args.is_train or save_test:
-        best_test_tsv = f'./Result/Temp/{task_name}-{timestamp}/best_test.tsv'
-        with open(mkdir(best_test_tsv), 'a' if os.path.exists(best_test_tsv) else 'w') as f:
-            f.write(decoloring(best_test_result) + '\n')
-    print(best_test_result)
-    print(f'{p_1}\t{p_3}\t{p_5}\t{ap}\t{map_}\t{mrr}\t{dcg_1}\t{dcg_3}\t{dcg_5}\t{ndcg_1}\t{ndcg_3}\t{ndcg_5}')
-
-
 def parse_args():
-    parser = argparse.ArgumentParser(description='Linear Regression Model')
-    parser.add_argument('--task_name', nargs='?', default='LR',
+    parser = argparse.ArgumentParser(description='SVM Model')
+    parser.add_argument('--task_name', nargs='?', default='SVM',
                         help='Task name')
 
     parser.add_argument('--alpha', type=float, default=0.8,
@@ -441,26 +332,15 @@ def main():
 
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
 
-    model = LinearRegressionModel(
+    model = SVMModel(
         freeze=args.freeze,
         pretrained_model_name_or_path=args.pretrained_model_path,
         device=device,
-        hidden_size=args.hidden_size,
-        bert_hidden_size=args.bert_hidden_size,
-        dropout_prob=args.dropout_prob,
-        num_layers=args.num_layers,
-        num_attention_heads=args.num_attention_heads,
-        is_peephole=args.is_peephole,
-        ci_mode=args.ci_mode,
-    ).to(device)
+    )
 
-    timestamp = None
-    if args.is_from_finetuned:
-        model.load_state_dict(torch.load(args.finetuned_model_path))
-    if args.is_train:
-        model, timestamp = train(args, args.task_name, model, train_dataloader, test_dataloader, args.epochs, args.lr, device, args.step)
+    model.train(train_dataloader)
+    model.predict(test_dataloader)
 
-    evaluate(args, args.task_name, model, test_dataloader, timestamp, args.save_test)
 
 if __name__ == '__main__':
     main()
