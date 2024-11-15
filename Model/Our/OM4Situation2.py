@@ -231,7 +231,7 @@ def parse_args():
                         help='Spacy path')
     parser.add_argument('--step', type=int, default=1,
                         help='Step')
-    parser.add_argument('--threshold', type=int, default=5,
+    parser.add_argument('--threshold', type=int, default=0,
                         help='Threshold')
 
     return parser.parse_args()
