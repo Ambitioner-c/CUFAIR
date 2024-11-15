@@ -8,8 +8,7 @@ import numpy as np
 import pandas as pd
 import spacy
 import torch
-from sklearn.preprocessing import StandardScaler
-from sklearn.svm import SVC
+from sklearn.linear_model  import LinearRegression
 from torch import nn
 from tqdm import tqdm
 from transformers import BertModel, set_seed, AutoTokenizer
@@ -34,7 +33,7 @@ simplefilter(action='ignore', category=DeprecationWarning)
 ignore_warning(name="transformers")
 
 
-class SVMModel:
+class LinearRegressionModel:
     def __init__(
             self,
             freeze: bool = False,
@@ -53,8 +52,7 @@ class SVMModel:
 
         self.feature_norm = nn.BatchNorm1d(44).to(self.device)
 
-        self.scaler = StandardScaler()
-        self.svc = SVC(kernel='linear', C=1.0, random_state=2024)
+        self.linear_regression = LinearRegression()
 
     def forward(self, inputs):
         text_left = torch.stack([x.to(self.device) for x in inputs['text_left']], dim=0)                # torch.Size([batch_size, max_length])
@@ -88,9 +86,7 @@ class SVMModel:
         all_features = np.vstack(all_features)
         all_labels = train_dataloader.label
 
-        all_features = self.scaler.fit_transform(all_features)
-
-        self.svc.fit(all_features, all_labels)
+        self.linear_regression.fit(all_features, all_labels)
 
     def predict(self, test_dataloader):
         all_features = []
@@ -102,9 +98,7 @@ class SVMModel:
             all_features.append(features)
         all_features = np.vstack(all_features)
 
-        all_features = self.scaler.transform(all_features)
-
-        y_pred = self.svc.predict(all_features)
+        y_pred = self.linear_regression.predict(all_features)
         y_true = test_dataloader.label
         id_left = test_dataloader.id_left
 
@@ -332,7 +326,7 @@ def main():
 
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
 
-    model = SVMModel(
+    model = LinearRegressionModel(
         freeze=args.freeze,
         pretrained_model_name_or_path=args.pretrained_model_path,
         device=device,
