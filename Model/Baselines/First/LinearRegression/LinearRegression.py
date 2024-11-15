@@ -105,7 +105,7 @@ class LinearRegressionModel:
         (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5) = (
             eval_ranking_metrics_on_data_frame(id_left, y_true, y_pred))
         best_test_result = (
-            f'{'SVM'}\t'
+            f'{'LR'}\t'
             f'Ranking:\t'
             f'{coloring("p@1", "red_bg")}:{round(p_1, 4)}\t'
             f'{coloring("p@3", "red_bg")}:{round(p_3, 4)}\t'
