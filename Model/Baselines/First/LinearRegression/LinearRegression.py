@@ -20,7 +20,6 @@ from Model.Losses.RankHingeLoss import RankHingeLoss
 from Model.DataLoader.DataLoader import DataLoader
 from Model.DataLoader.DataProcessor import OurProcessor
 from Model.DataLoader.Dataset import OurDataset
-from Model.LSTM.SQACILSTM import SQACILSTMModel
 from Model.Our.Dimension.ArgumentQuality import ArgumentQuality
 
 from warnings import simplefilter
@@ -38,7 +37,7 @@ simplefilter(action='ignore', category=DeprecationWarning)
 ignore_warning(name="transformers")
 
 
-class OurModel(nn.Module):
+class LinearRegressionModel(nn.Module):
     def __init__(
             self,
             freeze: bool = False,
@@ -53,7 +52,7 @@ class OurModel(nn.Module):
             is_peephole: bool = False,
             ci_mode: str = 'all',
     ):
-        super(OurModel, self).__init__()
+        super(LinearRegressionModel, self).__init__()
         self.device = device
 
         self.bert = BertModel.from_pretrained(pretrained_model_name_or_path)
@@ -64,65 +63,32 @@ class OurModel(nn.Module):
             for p in self.bert.parameters():
                 p.requires_grad = False
 
-        self.reduction_layer = nn.Linear(bert_hidden_size, hidden_size)
-
         self.feature_norm = nn.BatchNorm1d(44)
 
-        self.relevancy_layer = nn.Linear(hidden_size * 2, 20)
-
-        self.sqacilstm = SQACILSTMModel(
-            question_size=hidden_size,
-            answer_size=hidden_size,
-            input_size=hidden_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            output_size=hidden_size,
-            num_attention_heads=num_attention_heads,
-            is_peephole=is_peephole,
-            ci_mode=ci_mode,
-        )
-
-        self.credibility_layer = nn.Linear(hidden_size, 64)
-
-        self.community_support_layer = nn.Linear(64, 1)
-
-        self.usefulness_layer = nn.Linear(128, num_labels)
-
-        self.dropout = nn.Dropout(dropout_prob)
+        self.usefulness_layer = nn.Linear(45, 1)
 
     def forward(self, inputs: dict):
         text_left = torch.stack([x.to(self.device) for x in inputs['text_left']], dim=0)            # torch.Size([batch_size, max_length])
         text_right = torch.stack([x.to(self.device) for x in inputs['text_right']], dim=0)          # torch.Size([batch_size, max_length])
-        comment = torch.stack([x.to(self.device) for x in inputs['comment']], dim=0)                # torch.Size([batch_size, max_sequence_length, max_length])
-        ping = torch.stack([x.to(self.device) for x in inputs['ping']], dim=0)                      # torch.Size([batch_size, max_sequence_length])
         feature = torch.stack([torch.tensor(x).to(self.device) for x in inputs['feature']], dim=0)  # torch.Size([batch_size, 44])
         try:
             feature = self.feature_norm(feature)                                                        # torch.Size([batch_size, 44])
         except ValueError:
             feature = feature
 
-        bert_output_left = self.reduction_layer(self.bert(text_left)['pooler_output'])              # torch.Size([batch_size, hidden_size])
-        bert_output_right = self.reduction_layer(self.bert(text_right)['pooler_output'])            # torch.Size([batch_size, hidden_size])
-
-        bert_output_comment = []
-        for j in range(len(comment)):
-            bert_output_comment.append(self.reduction_layer(self.bert(comment[j])['pooler_output']))
-        bert_output_comment = torch.stack(bert_output_comment, dim=0)                               # torch.Size([batch_size, max_sequence_length, hidden_size])
+        bert_output_left = self.bert(text_left)['pooler_output']                                    # torch.Size([batch_size, bert_hidden_size])
+        bert_output_right = self.bert(text_right)['pooler_output']                                  # torch.Size([batch_size, bert_hidden_size])
 
         # AQ
         # Relevancy
-        relevancy = self.relevancy_layer(
-            torch.cat([bert_output_left, bert_output_right], dim=-1))                        # torch.Size([batch_size, 20])
-        argument_quality = torch.cat([relevancy, feature], dim=-1)                           # torch.Size([batch_size, 64])
+        relevancy = torch.nn.functional.cosine_similarity(
+            bert_output_left, bert_output_right, dim=-1)                                            # torch.Size([batch_size, 1])
 
-        # SC
-        source_credibility = self.sqacilstm(bert_output_left.unsqueeze(1), bert_output_right.unsqueeze(1), bert_output_comment, ping)[:, -1, :]     # torch.Size([batch_size, hidden_size])
-        source_credibility = self.credibility_layer(source_credibility)                                             # torch.Size([batch_size, 64])
+        argument_quality = torch.cat([relevancy.unsqueeze(-1), feature], dim=-1)             # torch.Size([batch_size, 45])
 
-        usefulness = torch.cat([argument_quality, source_credibility], dim=-1)                               # torch.Size([batch_size, 128])
-        outputs = self.usefulness_layer(usefulness)[:, 1].unsqueeze(1)                                              # torch.Size([batch_size, 1])
+        outputs = self.usefulness_layer(argument_quality)                                           # torch.Size([batch_size, 1])
 
-        return outputs, self.community_support_layer(source_credibility)
+        return outputs
 
 
 def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, device, step):
@@ -142,7 +108,6 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
         margin=args.margin,
         num_neg=args.num_neg,
     )
-    support_loss_function = nn.MSELoss()
 
     best_model = None
     (best_p_1, best_p_3, best_p_5, best_ap, best_map), best_mrr, (best_dcg_1, best_dcg_3, best_dcg_5), (best_ndcg_1, best_ndcg_3, best_ndcg_5) = (
@@ -151,18 +116,13 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
     n = 0
     for epoch in range(epochs):
         for train_sample in tqdm(train_dataloader):
-            train_inputs, _, supports = train_sample
-            mask = supports >= 0
+            train_inputs, _, _ = train_sample
 
             optimizer.zero_grad()
 
-            train_outputs, train_output_supports = model(train_inputs)
+            train_outputs = model(train_inputs)
 
             train_loss = loss_function(train_outputs)
-            train_support_loss = support_loss_function(input=train_output_supports[mask], target=supports[mask].to(device))
-
-            if not torch.isnan(train_support_loss):
-                train_loss = args.alpha * train_loss + (1 - args.alpha) * train_support_loss
 
             train_loss.backward()
 
@@ -170,8 +130,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
 
             temp_train_result = (f'{task_name}\t'
                                  f'epoch/epochs:{epoch + 1}/{epochs}\t'
-                                 f'{coloring("train_loss", "red_bg")}:{train_loss.item()}\t'
-                                 f'{coloring("train_support_loss", "green_bg")}:{train_support_loss.item()}')
+                                 f'{coloring("train_loss", "red_bg")}:{train_loss.item()}')
             with open(mkdir(temp_train_tsv), 'a' if os.path.exists(temp_train_tsv) else 'w') as f:
                 f.write(decoloring(temp_train_result) + '\n')
 
@@ -180,7 +139,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
                 for dev_sample in dev_dataloader:
                     dev_inputs, _, _ = dev_sample
                     with torch.no_grad():
-                        dev_outputs = model(dev_inputs)[0].detach().cpu()
+                        dev_outputs = model(dev_inputs).detach().cpu()
                         predictions.append(dev_outputs)
                 y_pred = torch.cat(predictions, dim=0).numpy()
                 y_true = dev_dataloader.label
@@ -292,26 +251,12 @@ def eval_ranking_metrics_on_data_frame(
 
 
 def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
-    mse_loss_function = nn.MSELoss()
-    mae_loss_function = nn.L1Loss()
-
     predictions = []
-    mse_losses = []
-    mae_losses = []
     for test_sample in test_dataloader:
-        test_inputs, _, supports = test_sample
-        mask = supports >= 0
+        test_inputs, _, _ = test_sample
 
         with torch.no_grad():
-            test_outputs, test_output_supports = model(test_inputs)
-
-            mse_loss = mse_loss_function(input=test_output_supports[mask], target=supports[mask].to(model.device))
-            mae_loss = mae_loss_function(input=test_output_supports[mask], target=supports[mask].to(model.device))
-
-            if not torch.isnan(mse_loss):
-                mse_losses.append(mse_loss.item())
-            if not torch.isnan(mae_loss):
-                mae_losses.append(mae_loss.item())
+            test_outputs = model(test_inputs)
 
             predictions.append(test_outputs.detach().cpu())
     y_pred = torch.cat(predictions, dim=0).numpy()
@@ -321,8 +266,6 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
         eval_ranking_metrics_on_data_frame(id_left, y_true, y_pred.squeeze(axis=-1)))
     best_test_result = (
         f'{task_name}\t'
-        f'{coloring("mse_loss", "purple_bg")}:{np.mean(mse_losses)}\t'
-        f'{coloring("mae_loss", "purple_bg")}:{np.mean(mae_losses)}\t'
         f'Ranking:\t'
         f'{coloring("p@1", "red_bg")}:{round(p_1, 4)}\t'
         f'{coloring("p@3", "red_bg")}:{round(p_3, 4)}\t'
@@ -346,8 +289,8 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Our Model')
-    parser.add_argument('--task_name', nargs='?', default='OM',
+    parser = argparse.ArgumentParser(description='Linear Regression Model')
+    parser.add_argument('--task_name', nargs='?', default='LR',
                         help='Task name')
 
     parser.add_argument('--alpha', type=float, default=0.8,
@@ -366,13 +309,13 @@ def parse_args():
                         help='Device')
     parser.add_argument('--dropout_prob', type=float, default=0.1,
                         help='Dropout probability')
-    parser.add_argument('--epochs', type=int, default=5,
+    parser.add_argument('--epochs', type=int, default=3,
                         help='Number of epochs')
-    parser.add_argument('--finetuned_model_path', nargs='?', default='./FinetunedModel/Our_model-20241004_191930/best_model.pth',
+    parser.add_argument('--finetuned_model_path', nargs='?', default='./FinetunedModel/XXX/best_model.pth',
                         help='Finetuned model path')
     parser.add_argument('--fold', type=int, default=1,
                         help='Fold')
-    parser.add_argument('--freeze', type=bool, default=False,
+    parser.add_argument('--freeze', type=bool, default=True,
                         help='Freeze')
     parser.add_argument('--hidden_size', type=int, default=108,
                         help='Hidden size')
@@ -498,7 +441,7 @@ def main():
 
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
 
-    model = OurModel(
+    model = LinearRegressionModel(
         freeze=args.freeze,
         pretrained_model_name_or_path=args.pretrained_model_path,
         device=device,
