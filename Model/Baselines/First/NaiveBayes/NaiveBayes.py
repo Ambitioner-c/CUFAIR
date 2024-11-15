@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import spacy
 import torch
-from sklearn.linear_model  import LinearRegression
+from sklearn.naive_bayes import MultinomialNB
 from torch import nn
 from tqdm import tqdm
 from transformers import BertModel, set_seed, AutoTokenizer
@@ -33,7 +33,7 @@ simplefilter(action='ignore', category=DeprecationWarning)
 ignore_warning(name="transformers")
 
 
-class LinearRegressionModel:
+class NaiveBayesModel:
     def __init__(
             self,
             freeze: bool = False,
@@ -52,7 +52,7 @@ class LinearRegressionModel:
 
         self.feature_norm = nn.BatchNorm1d(44).to(self.device)
 
-        self.linear_regression = LinearRegression()
+        self.naive_bayes = MultinomialNB()
 
     def forward(self, inputs):
         text_left = torch.stack([x.to(self.device) for x in inputs['text_left']], dim=0)                # torch.Size([batch_size, max_length])
@@ -72,6 +72,7 @@ class LinearRegressionModel:
             bert_output_left, bert_output_right, dim=-1)                                                # torch.Size([batch_size, 1])
 
         argument_quality = torch.cat([relevancy.unsqueeze(-1), feature], dim=-1)                 # torch.Size([batch_size, 45])
+        argument_quality = torch.clamp(argument_quality, min=0.0)
 
         return argument_quality.detach().cpu().numpy()
 
@@ -86,7 +87,7 @@ class LinearRegressionModel:
         all_features = np.vstack(all_features)
         all_labels = train_dataloader.label
 
-        self.linear_regression.fit(all_features, all_labels)
+        self.naive_bayes.fit(all_features, all_labels)
 
     def predict(self, test_dataloader):
         all_features = []
@@ -98,14 +99,14 @@ class LinearRegressionModel:
             all_features.append(features)
         all_features = np.vstack(all_features)
 
-        y_pred = self.linear_regression.predict(all_features)
+        y_pred = self.naive_bayes.predict(all_features)
         y_true = test_dataloader.label
         id_left = test_dataloader.id_left
 
         (p_1, p_3, p_5, ap, map_), mrr, (dcg_1, dcg_3, dcg_5), (ndcg_1, ndcg_3, ndcg_5) = (
             eval_ranking_metrics_on_data_frame(id_left, y_true, y_pred))
         best_test_result = (
-            f'{'SVM'}\t'
+            f'{'NB'}\t'
             f'Ranking:\t'
             f'{coloring("p@1", "red_bg")}:{round(p_1, 4)}\t'
             f'{coloring("p@3", "red_bg")}:{round(p_3, 4)}\t'
@@ -174,8 +175,8 @@ def eval_ranking_metrics_on_data_frame(
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Linear Regression Model')
-    parser.add_argument('--task_name', nargs='?', default='LR',
+    parser = argparse.ArgumentParser(description='Naive Bayes Model')
+    parser.add_argument('--task_name', nargs='?', default='NB',
                         help='Task name')
 
     parser.add_argument('--alpha', type=float, default=0.8,
@@ -326,7 +327,7 @@ def main():
 
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
 
-    model = LinearRegressionModel(
+    model = NaiveBayesModel(
         freeze=args.freeze,
         pretrained_model_name_or_path=args.pretrained_model_path,
         device=device,
