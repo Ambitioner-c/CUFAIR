@@ -174,8 +174,8 @@ def eval_ranking_metrics_on_data_frame(
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='SVM Model')
-    parser.add_argument('--task_name', nargs='?', default='SVM',
+    parser = argparse.ArgumentParser(description='Linear Regression Model')
+    parser.add_argument('--task_name', nargs='?', default='LR',
                         help='Task name')
 
     parser.add_argument('--alpha', type=float, default=0.8,
