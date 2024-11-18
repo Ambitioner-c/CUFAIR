@@ -119,9 +119,16 @@
 
                 commentSection.innerHTML = table;
 
+                // Update dropdown value based on selections
+                const optionSelect = document.getElementById('optionSelect');
+                if (selections[page]) {
+                    optionSelect.value = selections[page].selected_option || '0';
+                } else {
+                    optionSelect.value = '0';
+                }
+
                 // 记录用户选择
-                document.getElementById('optionSelect').value = '0'; // 重置选择框
-                document.getElementById('optionSelect').onchange = function() {
+                optionSelect.onchange = function() {
                     selections[page] = {
                         page_index: page,
                         question_id: questionID,
