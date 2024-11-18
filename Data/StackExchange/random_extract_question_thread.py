@@ -42,6 +42,7 @@ class Extract:
         text_other_times: list = []
         text_others: list = []
 
+        n = 0
         elems = []
         for elem in tqdm(self.iterparse(f'./{self.data_name}/All/all.xml', limit=self.limit), desc=f"Splitting {self.data_name} All XML file"):
             # Answers
@@ -51,13 +52,14 @@ class Extract:
             if self.mode == 'accept':
                 is_exist = sum([1 for answer in answers if answer.attrib['ACCEPTED_ANSWER'] == 'Yes'])
                 if is_exist and random.choice([True, False]):
+                    n += 1
+                    if n == 101:
+                        break
                     candidates = []
                     for answer in answers:
                         if int(answer.attrib['COMMENT_COUNT']):
                             candidates.append(answer)
-                    if len(candidates):
-                        answer = random.choice(candidates)
-
+                    for answer in candidates:
                         q_id = elem.attrib['ID']
                         q_name = elem.find('Question').attrib['OWNER_DISPLAY_NAME']
                         q_time = elem.find('Question').attrib['CREATION_DATE'].replace('T', ' ')
@@ -94,17 +96,10 @@ class Extract:
             'comment_time': text_other_times,
             'comment': text_others,
         })
-        print(df)
-        filepath = Path(__file__).parent.joinpath(f'{self.data_name}/All/labeled.csv')
+        print('# Unique question:', df['question_id'].nunique())
+        filepath = Path(__file__).parent.joinpath(f'{self.data_name}/All/labeled2.csv')
         if not Path.exists(filepath):
             df.to_csv(filepath, index=False)
-
-        left_id_set = set(df['question_id'])
-        for i, (train_index, test_index) in enumerate(self.kf.split(elems)):
-            train_elems = [elems[j] for j in train_index]
-            print('#Train:', sum(1 for elem in train_elems if elem in left_id_set))
-            test_elems = [elems[j] for j in test_index]
-            print('#Test', sum(1 for elem in test_elems if elem in left_id_set))
 
     @staticmethod
     def iterparse(filepath: str, limit: int):
