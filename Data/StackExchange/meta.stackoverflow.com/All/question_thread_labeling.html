@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Community Support Labeling</title>
+    <title>Question Thread Labeling</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -65,7 +65,7 @@
         let resultString = '';
 
         function renderPage(page) {
-            if (data.length > 0) {
+            if (data.length > 0 && page >= 0 && page < data.length) {
                 const questionID = data[page].question_id || 'N/A';
                 const questionerName = data[page].questioner_name || 'N/A';
                 const questionTime = data[page].question_time || 'N/A';
@@ -75,9 +75,11 @@
                 const answerTime = data[page].answer_time || 'N/A';
                 const answer = data[page].answer || 'N/A';
 
+                document.getElementById("question_id").innerText = questionID;
                 document.getElementById("questioner_name").innerText = questionerName;
                 document.getElementById("question_time").innerText = questionTime;
                 document.getElementById("question").innerText = question;
+                document.getElementById("answer_id").innerText = answerID;
                 document.getElementById("answerer_name").innerText = answererName;
                 document.getElementById("answer_time").innerText = answerTime;
                 document.getElementById("answer").innerText = answer;
@@ -138,15 +140,10 @@
         }
 
         function nextPage() {
-            if (document.getElementById('optionSelect').value === '0') {
-                alert("请先选择一个选项。");
-                return;
-            }
             if (currentPage < data.length - 1) {
                 currentPage++;
                 renderPage(currentPage);
-            }
-            else {
+            } else {
                 alert("已经是最后一页。");
 
                 // 自动下载selections结果
@@ -164,6 +161,16 @@
             if (currentPage > 0) {
                 currentPage--;
                 renderPage(currentPage);
+            }
+        }
+
+        function goToPage() {
+            const pageInput = parseInt(document.getElementById("pageInput").value);
+            if (!isNaN(pageInput) && pageInput >= 0 && pageInput < data.length) {
+                currentPage = pageInput;
+                renderPage(currentPage);
+            } else {
+                alert("请输入有效的页面编号。");
             }
         }
 
@@ -196,8 +203,12 @@
         <h1>Community Support Labeling</h1>
         <input type="file" id="fileInput" accept=".csv" onchange="handleFileSelect(event)">
         <div>
-            <p><strong>1. Read the question, the answer, and the answer's comments.</strong></p>
+            <p><strong>1. 阅读问题、多个候选答案答案（下一页）及这些答案的评论。</strong></p>
         </div>
+        <p>
+            <em>Question ID:</em>
+            <span id="question_id"></span>
+        </p>
         <p>
             <em>Questioner Name:</em>
             <u><span id="questioner_name"></span></u>
@@ -209,6 +220,10 @@
         <p>
             <em>Question:</em>
             <span id="question"></span>
+        </p>
+        <p>
+            <em>Answer ID:</em>
+            <span id="answer_id"></span>
         </p>
         <p>
             <em>Answerer Name:</em>
@@ -227,22 +242,25 @@
         <div class="comment-section" id="comment-section"></div>
 
         <div>
-            <p><strong>2. As time progresses, understand the possible discussions that may arise in the comments. Then evaluate the extent to which these comments support the answer. Please select an option from the dropdown menu.</strong></p>
+            <p><strong>2. 只根据问题与答案的相关性，评估该答案是否是最相关的。同时，只根据评论对答案的支持度，评估该答案是否是最受支持的。如果两者都反映在同一个答案上，则选“都高”。</strong></p>
         </div>
         <div class="select-option">
             <label for="optionSelect">Choose an option:</label>
             <select id="optionSelect">
                 <option value="0">待选择</option>
-                <option value="1">强烈反对</option>
-                <option value="2">反对</option>
-                <option value="3">中立</option>
-                <option value="4">支持</option>
-                <option value="5">强烈支持</option>
+                <option value="1">最高的问答相关性</option>
+                <option value="2">都高</option>
+                <option value="3">最高的社区支持度</option>
+                <option value="4">选错了</option>
             </select>
         </div>
         <div class="navigation">
             <button onclick="previousPage()">Previous</button>
             <button onclick="nextPage()">Next</button>
+        </div>
+        <div class="navigation">
+            <input type="number" id="pageInput" placeholder="输入页面编号" min="0" max="200">
+            <button onclick="goToPage()">跳转到指定页</button>
         </div>
     </div>
 </body>
