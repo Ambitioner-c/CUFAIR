@@ -71,8 +71,8 @@ class OurModel(nn.Module):
         text_left = torch.stack([x.to(self.device) for x in inputs['text_left']], dim=0)            # torch.Size([batch_size, max_length])
         text_right = torch.stack([x.to(self.device) for x in inputs['text_right']], dim=0)          # torch.Size([batch_size, max_length])
 
-        xlnet_output_left = self.xlnet(text_left)['pooler_output']              # torch.Size([batch_size, hidden_size])
-        xlnet_output_right = self.xlnet(text_right)['pooler_output']            # torch.Size([batch_size, hidden_size])
+        xlnet_output_left = self.xlnet(text_left)['last_hidden_state'][:, 0, :]              # torch.Size([batch_size, hidden_size])
+        xlnet_output_right = self.xlnet(text_right)['last_hidden_state'][:, 0, :]            # torch.Size([batch_size, hidden_size])
 
         # AQ
         # Relevancy
@@ -300,7 +300,7 @@ def parse_args():
                         help='Number of epochs')
     parser.add_argument('--finetuned_model_path', nargs='?', default='./FinetunedModel/Our_model-20241004_191930/best_model.pth',
                         help='Finetuned model path')
-    parser.add_argument('--fold', type=int, default=1,
+    parser.add_argument('--fold', type=int, default=2,
                         help='Fold')
     parser.add_argument('--freeze', type=bool, default=False,
                         help='Freeze')
