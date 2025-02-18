@@ -71,8 +71,8 @@ class OurModel(nn.Module):
         text_left = torch.stack([x.to(self.device) for x in inputs['text_left']], dim=0)            # torch.Size([batch_size, max_length])
         text_right = torch.stack([x.to(self.device) for x in inputs['text_right']], dim=0)          # torch.Size([batch_size, max_length])
 
-        distilbert_output_left = self.distilbert(text_left)['pooler_output']              # torch.Size([batch_size, hidden_size])
-        distilbert_output_right = self.distilbert(text_right)['pooler_output']            # torch.Size([batch_size, hidden_size])
+        distilbert_output_left = self.distilbert(text_left)['last_hidden_state'][:, 0, :]              # torch.Size([batch_size, hidden_size])
+        distilbert_output_right = self.distilbert(text_right)['last_hidden_state'][:, 0, :]            # torch.Size([batch_size, hidden_size])
 
         # AQ
         # Relevancy
