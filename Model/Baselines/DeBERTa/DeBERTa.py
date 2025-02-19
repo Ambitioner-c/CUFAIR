@@ -14,7 +14,7 @@ import torch
 from torch import nn
 from torch.optim import Adam
 from tqdm import tqdm
-from transformers import AlbertModel, set_seed, AutoTokenizer
+from transformers import DebertaModel, set_seed, AutoTokenizer
 
 from Model.Losses.RankHingeLoss import RankHingeLoss
 from Model.DataLoader.DataLoader import DataLoader
@@ -41,10 +41,10 @@ class OurModel(nn.Module):
     def __init__(
             self,
             freeze: bool = False,
-            pretrained_model_name_or_path: str = 'albert-base-v2',
+            pretrained_model_name_or_path: str = 'deberta-base',
             device: torch.device = torch.device('cuda:0'),
             hidden_size: int = 108,
-            albert_hidden_size: int = 768,
+            deberta_hidden_size: int = 768,
             dropout_prob: float = 0.1,
             num_layers: int = 1,
             num_attention_heads: int = 12,
@@ -55,15 +55,15 @@ class OurModel(nn.Module):
         super(OurModel, self).__init__()
         self.device = device
 
-        self.albert = AlbertModel.from_pretrained(pretrained_model_name_or_path)
-        for p in self.albert.parameters():
+        self.deberta = DebertaModel.from_pretrained(pretrained_model_name_or_path)
+        for p in self.deberta.parameters():
             p.data = p.data.contiguous()
 
         if freeze:
-            for p in self.albert.parameters():
+            for p in self.deberta.parameters():
                 p.requires_grad = False
 
-        self.relevancy_layer = nn.Linear(albert_hidden_size * 2, num_labels)
+        self.relevancy_layer = nn.Linear(deberta_hidden_size * 2, num_labels)
 
         self.dropout = nn.Dropout(dropout_prob)
 
@@ -71,13 +71,13 @@ class OurModel(nn.Module):
         text_left = torch.stack([x.to(self.device) for x in inputs['text_left']], dim=0)            # torch.Size([batch_size, max_length])
         text_right = torch.stack([x.to(self.device) for x in inputs['text_right']], dim=0)          # torch.Size([batch_size, max_length])
 
-        albert_output_left = self.albert(text_left)['pooler_output']              # torch.Size([batch_size, hidden_size])
-        albert_output_right = self.albert(text_right)['pooler_output']            # torch.Size([batch_size, hidden_size])
+        deberta_output_left = self.deberta(text_left)['last_hidden_state'][:, 0, :]              # torch.Size([batch_size, hidden_size])
+        deberta_output_right = self.deberta(text_right)['last_hidden_state'][:, 0, :]            # torch.Size([batch_size, hidden_size])
 
         # AQ
         # Relevancy
         relevancy = self.relevancy_layer(
-            torch.cat([albert_output_left, albert_output_right], dim=-1))                        # torch.Size([batch_size, 20])
+            torch.cat([deberta_output_left, deberta_output_right], dim=-1))                        # torch.Size([batch_size, 20])
 
         outputs = relevancy[:, 1].unsqueeze(1)                                                      # torch.Size([batch_size, 1])
 
@@ -92,7 +92,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
     temp_dev_tsv = f'./Result/Temp/{task_name}-{timestamp}/dev.tsv'
     best_dev_tsv = f'./Result/Temp/{task_name}-{timestamp}/best_dev.tsv'
     finetuned_model_path = f'./FinetunedModel/{task_name}-{timestamp}/best_model.pth'
-    finetuned_albert_model_path = f'./FinetunedModel/{task_name}-{timestamp}/albert-base-v2'
+    finetuned_deberta_model_path = f'./FinetunedModel/{task_name}-{timestamp}/deberta-base'
 
     save_args_to_file(args, mkdir(args_path))
 
@@ -168,7 +168,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
             n += 1
 
     torch.save(best_model.state_dict(), mkdir(finetuned_model_path))
-    best_model.albert.save_pretrained(mkdir(finetuned_albert_model_path))
+    best_model.deberta.save_pretrained(mkdir(finetuned_deberta_model_path))
     best_dev_result = (
         f'{coloring("best_p@1", "red_bg")}:{round(best_p_1, 4)}\t'
         f'{coloring("best_p@3", "red_bg")}:{round(best_p_3, 4)}\t'
@@ -188,7 +188,7 @@ def train(args, task_name, model, train_dataloader, dev_dataloader, epochs, lr, 
     print(best_dev_result)
 
     print(f'{coloring("Finetuned model path", "red_bg")}: {finetuned_model_path}')
-    print(f'{coloring("Finetuned albert model path", "green_bg")}: {finetuned_albert_model_path}')
+    print(f'{coloring("Finetuned deberta model path", "green_bg")}: {finetuned_deberta_model_path}')
 
     return best_model, timestamp
 
@@ -278,14 +278,14 @@ def evaluate(args, task_name, model, test_dataloader, timestamp, save_test):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='ALBERT Model')
-    parser.add_argument('--task_name', nargs='?', default='ALBERT',
+    parser = argparse.ArgumentParser(description='DeBERTa Model')
+    parser.add_argument('--task_name', nargs='?', default='DeBERTa',
                         help='Task name')
 
     parser.add_argument('--batch_size', type=int, default=4,
                         help='Batch size')
-    parser.add_argument('--albert_hidden_size', type=int, default=768,
-                        help='Albert hidden size')
+    parser.add_argument('--deberta_hidden_size', type=int, default=768,
+                        help='DeBERTa hidden size')
     parser.add_argument('--ci_mode', nargs='?', default='all',
                         help='CI Mode')
     parser.add_argument('--data_dir', nargs='?', default='/home/cuifulai/Projects/CQA/Data/StackExchange',
@@ -332,7 +332,7 @@ def parse_args():
                         help='Number of labels')
     parser.add_argument('--num_layers', type=int, default=1,
                         help='Number of layers')
-    parser.add_argument('--pretrained_model_path', nargs='?', default='/data/cuifulai/PretrainedModel/albert-base-v2',
+    parser.add_argument('--pretrained_model_path', nargs='?', default='/data/cuifulai/PretrainedModel/deberta-base',
                         help='Pretrained model path')
     parser.add_argument('--save_test', type=bool, default=False,
                         help='Save test')
@@ -428,7 +428,7 @@ def main():
         pretrained_model_name_or_path=args.pretrained_model_path,
         device=device,
         hidden_size=args.hidden_size,
-        albert_hidden_size=args.albert_hidden_size,
+        deberta_hidden_size=args.deberta_hidden_size,
         dropout_prob=args.dropout_prob,
         num_layers=args.num_layers,
         num_attention_heads=args.num_attention_heads,
