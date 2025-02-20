@@ -3,9 +3,9 @@ ___
 
 This is our implementation for the paper:
 
-`Yidong Chai`, Fulai Cui, Shuo Yu, Yuanchun Jiang, Haoxin Liu, Yezheng Liu. Identifying Useful Answers on Community-Based Question Answering Platforms: A Novel Unified Answer Comment-Based Approach. Preprint at https://ssrn.com/abstract=5026989, 2024.
+Identifying Useful Answers on Community-Based Question Answering Platforms: A Novel Unified Answer Comment-Based Approach. Preprint at https://ssrn.com/abstract=5026989, 2024.
 
-For more information, feel free to [Fulai Cui](mailto:cuifulai@mail.hfut.edu.cn).
+For more information, feel free to [email me](mailto:cuifulai@mail.hfut.edu.cn).
 ### Environment Settings
 - Python 3.12.4
 - Required libraries: `numpy`, `pandas`, `pytorch`, `scikit-learn`, etc.
